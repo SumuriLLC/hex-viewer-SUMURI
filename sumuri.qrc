@@ -1,0 +1,16 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/app_logo/Hex-Viewer.png</file>
+    </qresource>
+    <qresource prefix="/">
+           <file>icons/app_logo/hex_viewer_icon.ico</file>
+    </qresource>
+
+    <qresource prefix="/">
+       <file>icons/search.png</file>
+   </qresource>
+
+<qresource prefix="/">
+   <file>icons/jump.png</file>
+</qresource>
+</RCC>
