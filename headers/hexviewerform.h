@@ -15,8 +15,8 @@
 #include <QTimer>
 #include <QScrollBar>
 #include <QVector>
+#include "hexeditor.h"
 
-#include "datatypeviewmodel.h"
 
 
 namespace Ui {
@@ -31,15 +31,18 @@ public:
     explicit HexViewerForm(QWidget *parent = nullptr);
     ~HexViewerForm();
     void openFile(const QString &fileName);
-
+    HexEditor* hexEditor() const;
+    QByteArray getSelectedData() const;
 
 private slots:
     void onShowTablesClicked();
 
-
+    void onBytesPerLineChanged(int index);
+    void onGoToOffsetClicked();
 
 private:
     Ui::HexViewerForm *ui;
+
 
 
 };

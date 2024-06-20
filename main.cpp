@@ -4,6 +4,7 @@
 #include <QLocale>
 #include <QTranslator>
 #include <QStyleFactory>
+#include <QFontDatabase>
 
 
 int main(int argc, char *argv[])

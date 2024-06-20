@@ -43,6 +43,9 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
          ${CMAKE_SOURCE_DIR}/headers/openingdialog.h
         openingdialog.cpp
         openingdialog.ui
+         ${CMAKE_SOURCE_DIR}/headers/gotooffsetdialog.h
+        gotooffsetdialog.cpp
+        gotooffsetdialog.ui
 
     )
 # Define target properties for Android with Qt 6 as:

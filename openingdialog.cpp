@@ -28,13 +28,22 @@ void OpeningDialog::onSelectSourceClicked()
 
 void OpeningDialog::onDialogButtonClicked(QAbstractButton *button)
 {
+
+
     QDialogButtonBox::StandardButton standardButton = ui->buttonBox->standardButton(button);
 
 
     switch (standardButton) {
     case QDialogButtonBox::Ok:
+
+
         // Handle OK button clicked
         if (! ui->selectSourcelineEdit->text().isEmpty()) {
+
+            ui->labelLoading->setText("Loading...");
+            //qDebug()<<"loading";
+            qApp->processEvents();
+
             MainWindow *w = new MainWindow;
             w->createNewTab(ui->selectSourcelineEdit->text());
             w->show();

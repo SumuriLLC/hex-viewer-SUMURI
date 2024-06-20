@@ -11,6 +11,10 @@
    </qresource>
 
 <qresource prefix="/">
+       <file>icons/fonts/segoe-ui.ttf</file>
+   </qresource>
+
+<qresource prefix="/">
    <file>icons/jump.png</file>
 </qresource>
 </RCC>

@@ -61,22 +61,6 @@
     <string>EULA</string>
    </property>
   </widget>
-  <widget class="QPushButton" name="pushButton_4">
-   <property name="geometry">
-    <rect>
-     <x>660</x>
-     <y>220</y>
-     <width>101</width>
-     <height>31</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Load Case</string>
-   </property>
-   <property name="icon">
-    <iconset theme="document-open"/>
-   </property>
-  </widget>
   <widget class="QLineEdit" name="caseNolineEdit">
    <property name="geometry">
     <rect>
@@ -214,6 +198,9 @@
     <property name="text">
      <string>Forensic image</string>
     </property>
+    <property name="checked">
+     <bool>true</bool>
+    </property>
    </widget>
   </widget>
   <widget class="QLabel" name="label_5">
@@ -286,6 +273,41 @@
    <property name="text">
     <string>Case No. *</string>
    </property>
+  </widget>
+  <widget class="QWidget" name="layoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>540</x>
+     <y>220</y>
+     <width>222</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout">
+    <item>
+     <widget class="QLabel" name="labelLoading">
+      <property name="minimumSize">
+       <size>
+        <width>133</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="pushButton_4">
+      <property name="text">
+       <string>Load Case</string>
+      </property>
+      <property name="icon">
+       <iconset theme="document-open"/>
+      </property>
+     </widget>
+    </item>
+   </layout>
   </widget>
  </widget>
  <resources/>

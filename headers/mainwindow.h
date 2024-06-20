@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include "datatypeviewmodel.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -17,13 +18,16 @@ public:
     ~MainWindow();
     void createNewTab(const QString &fileName);
 
-
 private slots:
     void openFile();
+    void onEndianCheckboxStateChanged(quint64 state);
+    void onTabChanged(int index);
+    void onSelectionChanged(const QByteArray &selectedData, quint64 startOffset, quint64 endOffset);
 
 
 private:
     Ui::MainWindow *ui;
+    DataTypeViewModel *dataTypeViewModel;
 
 
 };

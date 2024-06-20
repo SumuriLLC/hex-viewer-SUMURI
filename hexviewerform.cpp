@@ -3,20 +3,18 @@
 #include <QDateTime>
 #include "headers/hexeditor.h"
 
+#include "headers/gotooffsetdialog.h"
 
 
 HexViewerForm::HexViewerForm(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::HexViewerForm)
 
+
 {
     qDebug() << "setup.";
 
     ui->setupUi(this);
-
-
-
-
     /*
     // Example usage of TSK library functions
     QString fileName = QFileDialog::getOpenFileName(this, tr("Open Image"), "", tr("All Files (*)"));
@@ -51,13 +49,15 @@ HexViewerForm::HexViewerForm(QWidget *parent)
     ui->tagstabWidget->setVisible(false);
     connect(ui->showTablesButton, &QPushButton::clicked, this, &HexViewerForm::onShowTablesClicked);
 
+    //Select 16 as default value
+    ui->bytesPerLinecomboBox->setCurrentIndex(3);
+    // Connect the bytes per line dropdown
+    connect(ui->bytesPerLinecomboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &HexViewerForm::onBytesPerLineChanged);
+
+    connect(ui->jumpToOffsetButton, &QPushButton::clicked, this, &HexViewerForm::onGoToOffsetClicked);
+
 
 }
-
-
-
-
-
 
 /*
 
@@ -82,7 +82,6 @@ void HexViewerForm::logImgInfo(TSK_IMG_INFO *img) {
 
 void HexViewerForm::openFile(const QString &fileName)
 {
-   // delete file; // Delete the old file object if any
 
     HexEditor *hexEditor = ui->hexEditorWidget;
 
@@ -95,17 +94,17 @@ void HexViewerForm::openFile(const QString &fileName)
 
     QByteArray fileData = file.readAll();
     hexEditor->setData(fileData);
+    hexEditor->setSelectedByte(0);
 
-
-   /* fileSize = file->size();
-    fileData.resize(fileSize);
-
-    // Initially read the first chunk of data
-    readFileChunk(0, chunkSize);
-
-    updateScrollBar();  */
 
 }
+
+HexEditor* HexViewerForm::hexEditor() const
+{
+    return ui->hexEditorWidget;
+}
+
+
 
 void HexViewerForm::onShowTablesClicked()
 {
@@ -120,6 +119,30 @@ void HexViewerForm::onShowTablesClicked()
 
 }
 
+void HexViewerForm::onBytesPerLineChanged(int index)
+{
+    quint64 bytesPerLine = ui->bytesPerLinecomboBox->itemText(index).toInt();
+    HexEditor *hexEditor = ui->hexEditorWidget;
+    hexEditor->changeBytesPerLine(bytesPerLine);
+}
+
+void HexViewerForm::onGoToOffsetClicked()
+{
+
+    GoToOffsetDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+
+        qDebug() << "onGoToOffsetClicked accepted";
+
+        quint64 newOffset = dialog.offset();
+        if (newOffset < ui->hexEditorWidget->getData().size()) {
+            ui->hexEditorWidget->clearSelection();
+            ui->hexEditorWidget->setCursorPosition(newOffset);
+            ui->hexEditorWidget->ensureCursorVisible();
+        }
+    }
+
+}
 
 
 HexViewerForm::~HexViewerForm()
