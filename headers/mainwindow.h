@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include "datatypeviewmodel.h"
+#include "filesystemhandler.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -28,6 +29,8 @@ private slots:
 private:
     Ui::MainWindow *ui;
     DataTypeViewModel *dataTypeViewModel;
+    FileSystemHandler *fsHandler;
+
 
 
 };

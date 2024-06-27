@@ -8,6 +8,7 @@
 OpeningDialog::OpeningDialog(QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::OpeningDialog)
+    ,loadingDialog(new LoadingDialog(this))
 {
     ui->setupUi(this);
 
@@ -40,13 +41,12 @@ void OpeningDialog::onDialogButtonClicked(QAbstractButton *button)
         // Handle OK button clicked
         if (! ui->selectSourcelineEdit->text().isEmpty()) {
 
-            ui->labelLoading->setText("Loading...");
-            //qDebug()<<"loading";
-            qApp->processEvents();
+
 
             MainWindow *w = new MainWindow;
             w->createNewTab(ui->selectSourcelineEdit->text());
             w->show();
+
         }
         accept();
         break;

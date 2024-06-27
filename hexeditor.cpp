@@ -9,14 +9,19 @@
 #include <QMenu>
 #include <QClipboard>
 #include <QInputDialog>
+#include <QFile>
 
 HexEditor::HexEditor(QWidget *parent)
     : QAbstractScrollArea(parent),
-    bytesPerLine(16),
-    selection(qMakePair(-1, -1)),  // Initialize selection as invalid
-    isDragging(false),  // Initialize dragging flag
+    cursorPosition(0),
+    bytesPerLine(16),  // Initialize selection as invalid
+    selection(qMakePair(-1, -1)),  // Initialize dragging flag
+    isDragging(false),
     cursorVisible(true),
-    cursorPosition(0)
+ cursorBlinkState(true),
+    visibleStart(0),
+    visibleEnd(0),
+    cursorByteOffset(0)
 {
     setFont(QFont("Courier New", 10));
     QFontMetrics fm(font());
@@ -28,9 +33,6 @@ HexEditor::HexEditor(QWidget *parent)
     hexAreaWidth = charWidth * 3 * bytesPerLine;
     asciiAreaWidth = charWidth * bytesPerLine;
 
-   // setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-   // setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-
     updateScrollbar();
 
     // Initialize cursor blink timer
@@ -39,23 +41,30 @@ HexEditor::HexEditor(QWidget *parent)
     cursorBlinkTimer.start();
 }
 
-void HexEditor::setData(const QByteArray &data)
+void HexEditor::setData(const QString &filePath)
 {
     {
-        QMutexLocker locker(&m_mutex); // Lock the mutex for thread-safe access
-        m_data = data;
+        file.setFileName(filePath);
+        if (!file.open(QIODevice::ReadOnly)) {
+            // Handle error
+            return;
+        }
+        fileSize = file.size();
+        m_data.clear();
     } // Unlock the mutex immediately after modifying m_data
+
     updateScrollbar();
+    updateVisibleData();
 
     // Reset selection
     selection.first = -1;
     selection.second = -1;
+    selectedOffsets.clear();
     viewport()->update();
 }
 
 QByteArray HexEditor::getData() const
 {
-    QMutexLocker locker(&m_mutex); // Lock the mutex for thread-safe access
     return m_data;
 }
 
@@ -71,21 +80,19 @@ void HexEditor::paintEvent(QPaintEvent *event)
 
     drawHeader(painter, horizontalOffset);
 
-    {
-        QMutexLocker locker(&m_mutex); // Lock the mutex during painting to ensure thread-safe access
-        drawAddressArea(painter, firstLine, horizontalOffset);
-        drawHexArea(painter, firstLine, horizontalOffset);
-        drawAsciiArea(painter, firstLine, horizontalOffset);
-        if (cursorVisible) {
-            drawCursor(painter);
-        }
-    } // Unlock the mutex immediately after drawing
+
+    drawAddressArea(painter, firstLine, horizontalOffset);
+    drawHexArea(painter, firstLine, horizontalOffset);
+    drawAsciiArea(painter, firstLine, horizontalOffset);
+    drawCursor(painter);
+
 }
 
 void HexEditor::resizeEvent(QResizeEvent *event)
 {
     Q_UNUSED(event);
     updateScrollbar();
+    updateVisibleData();
     viewport()->update();
 }
 
@@ -100,7 +107,7 @@ void HexEditor::mousePressEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton) {
         isDragging = true;
         updateSelection(event->pos(), true);
-        cursorPosition = selection.second;
+        cursorPosition = selection.second + visibleStart; // Update cursor position with respect to the file
     }
 }
 
@@ -108,7 +115,7 @@ void HexEditor::mouseMoveEvent(QMouseEvent *event)
 {
     if (isDragging && (event->buttons() & Qt::LeftButton)) {
         updateSelection(event->pos(), false);
-        cursorPosition = selection.second;
+        cursorPosition = selection.second + visibleStart; // Update cursor position with respect to the file
     }
 }
 
@@ -117,28 +124,41 @@ void HexEditor::mouseReleaseEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton) {
         isDragging = false;
         updateSelection(event->pos(), false);
-        cursorPosition = selection.second;
+        cursorPosition = selection.second + visibleStart; // Update cursor position with respect to the file
     }
 }
 
 void HexEditor::updateScrollbar()
 {
-    {
-        QMutexLocker locker(&m_mutex); // Lock the mutex for thread-safe access
-        quint64 lines = (m_data.size() + bytesPerLine - 1) / bytesPerLine;
-        verticalScrollBar()->setRange(0, lines-1); //1 Line adjustment
+
+        quint64 lines = (fileSize + bytesPerLine - 1) / bytesPerLine;
+        verticalScrollBar()->setRange(0, lines - 1); //1 Line adjustment
         verticalScrollBar()->setPageStep((viewport()->height() - headerHeight) / charHeight);
 
         int contentWidth = addressAreaWidth + hexAreaWidth + asciiAreaWidth;
         horizontalScrollBar()->setRange(0, qMax(0, contentWidth - viewport()->width()));
         horizontalScrollBar()->setPageStep(viewport()->width() / charWidth);
-    } // Unlock the mutex immediately after updating scrollbar range
+}
+
+void HexEditor::updateVisibleData()
+{
+
+    quint64 firstLine = verticalScrollBar()->value();
+    quint64 linesVisible = (viewport()->height() - headerHeight) / charHeight;
+
+    visibleStart = firstLine * bytesPerLine;
+    visibleEnd = qMin(fileSize, visibleStart + linesVisible * bytesPerLine);
+
+    file.seek(visibleStart);
+    data_visible = file.read(visibleEnd - visibleStart);
+
+    viewport()->update();
 }
 
 void HexEditor::updateSelection(const QPoint &pos, bool reset)
 {
-    quint64 offset = calculateOffset(pos);
-    if (offset == -1 || offset >= m_data.size()) {
+    qint64 offset = calculateOffset(pos);
+    if (offset == -1 || offset >= data_visible.size()) {
         return;  // Click outside the data range
     }
 
@@ -152,23 +172,28 @@ void HexEditor::updateSelection(const QPoint &pos, bool reset)
         std::swap(selection.first, selection.second);
     }
 
-    cursorPosition = selection.second; // Update cursor position
-    QByteArray selectedData = m_data.mid(selection.first, selection.second - selection.first + 1);
-    emit selectionChanged(selectedData, selection.first, selection.second);
+    // Update the set of selected offsets
+    selectedOffsets.clear();
+    for (quint64 i = selection.first + visibleStart; i <= selection.second + visibleStart; ++i) {
+        selectedOffsets.insert(i);
+    }
+
+    cursorPosition = selection.second + visibleStart; // Update cursor position with respect to the file
+    QByteArray selectedData = data_visible.mid(selection.first, selection.second - selection.first + 1);
+    emit selectionChanged(selectedData, selection.first + visibleStart, selection.second + visibleStart);
 
     viewport()->update();
 }
 
 QByteArray HexEditor::getSelectedBytes() const
 {
-    if (selection.first == -1 || selection.second == -1 || selection.first >= m_data.size()) {
-        return QByteArray();
+    QByteArray selectedBytes;
+    for (quint64 offset : selectedOffsets) {
+        if (offset >= visibleStart && offset < visibleEnd) {
+            selectedBytes.append(data_visible[offset - visibleStart]);
+        }
     }
-
-    quint64 start = qMin(selection.first, selection.second);
-    quint64 end = qMin(qMax(selection.first, selection.second), m_data.size() - 1);
-
-    return m_data.mid(start, end - start + 1);
+    return selectedBytes;
 }
 
 void HexEditor::setSelectedBytes(const QByteArray &selectedBytes)
@@ -176,32 +201,50 @@ void HexEditor::setSelectedBytes(const QByteArray &selectedBytes)
     if (selectedBytes.isEmpty()) {
         selection.first = -1;
         selection.second = -1;
+        selectedOffsets.clear();
     } else {
-        quint64 startOffset = m_data.indexOf(selectedBytes);
+        quint64 startOffset = data_visible.indexOf(selectedBytes);
         if (startOffset != -1) {
             selection.first = startOffset;
             selection.second = startOffset + selectedBytes.size() - 1;
+            for (quint64 i = selection.first + visibleStart; i <= selection.second + visibleStart; ++i) {
+                selectedOffsets.insert(i);
+            }
         } else {
             selection.first = -1;
             selection.second = -1;
+            selectedOffsets.clear();
         }
     }
 
     viewport()->update();
 }
 
-void HexEditor::setSelectedByte(quint64 offset)
+void HexEditor::setSelectedByte(qint64 offset)
 {
-    if (offset >= 0 && offset < m_data.size()) {
-        selection.first = offset;
-        selection.second = offset;
+
+    quint64 unsignedOffset = static_cast<quint64>(offset);
+
+    if (unsignedOffset >= 0 && unsignedOffset < fileSize) {
+        if (unsignedOffset < visibleStart || unsignedOffset >= visibleEnd) {
+            verticalScrollBar()->setValue(unsignedOffset / bytesPerLine);
+            updateVisibleData();
+        }
+        selection.first = unsignedOffset - visibleStart;
+        selection.second = selection.first;
+        selectedOffsets.clear();
+        selectedOffsets.insert(offset);
     } else {
         selection.first = -1;
         selection.second = -1;
+        selectedOffsets.clear();
     }
 
+    cursorPosition =selection.first + visibleStart; //Update cursor too
+    cursorByteOffset=cursorPosition;
+
     viewport()->update();
-    emit selectionChanged(m_data, selection.first, selection.second);  // Emit the signal
+    emit selectionChanged(data_visible, selection.first + visibleStart, selection.second + visibleStart);  // Emit the signal
 }
 
 quint64 HexEditor::calculateOffset(const QPoint &pos)
@@ -226,7 +269,7 @@ quint64 HexEditor::calculateOffset(const QPoint &pos)
         return -1;  // Click outside the hex or ASCII area
     }
 
-    return row * bytesPerLine + col;
+    return row * bytesPerLine + col - visibleStart;
 }
 
 void HexEditor::drawAddressArea(QPainter &painter, quint64 startLine, int horizontalOffset)
@@ -234,7 +277,7 @@ void HexEditor::drawAddressArea(QPainter &painter, quint64 startLine, int horizo
     painter.setPen(Qt::darkMagenta);
     for (quint64 line = startLine; line < startLine + (viewport()->height() - headerHeight) / charHeight; ++line) {
 
-        if (line * bytesPerLine >= m_data.size()) break;
+        if (line * bytesPerLine >= fileSize) break;
         QString address = QString("%1").arg(line * bytesPerLine, 16, 16, QChar('0')).toUpper();
         painter.drawText(-horizontalOffset, headerHeight + (line - startLine + 1) * charHeight, address);
     }
@@ -247,16 +290,13 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
     QFont boldFont = originalFont;
     boldFont.setBold(true);
 
-
     int linesVisible = (viewport()->height() - headerHeight) / charHeight;
     quint64 endLine = startLine + linesVisible;
-
 
     int totalHeight = headerHeight + (linesVisible + 1) * charHeight; // Ensure total height includes all visible lines
 
     // Draw vertical lines after every 8 columns
     for (quint64 i = 8; i < bytesPerLine; i += 8) {
-
         quint64 x = addressAreaWidth + i * 3 * charWidth - horizontalOffset;
         painter.drawLine(x, headerHeight, x, totalHeight);
     }
@@ -265,18 +305,14 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
     quint64 separatorX = addressAreaWidth + hexAreaWidth - horizontalOffset;
     painter.drawLine(separatorX, headerHeight, separatorX, totalHeight);
 
-
     for (quint64 line = startLine; line <= endLine; ++line) {
-
-
-         if (line * bytesPerLine >= m_data.size()) break;
+        if (line * bytesPerLine >= fileSize) break;
 
         for (quint64 byte = 0; byte < bytesPerLine; ++byte) {
             quint64 pos = line * bytesPerLine + byte;
-            if (pos >= m_data.size())
-                return;
+            if (pos - visibleStart >= static_cast<quint64>(data_visible.size())) return;
 
-            if (selection.first != -1 && pos >= selection.first && pos <= selection.second) {
+            if (selectedOffsets.contains(pos)) {
                 painter.fillRect(addressAreaWidth + byte * 3 * charWidth - horizontalOffset, headerHeight + (line - startLine) * charHeight, 3 * charWidth, charHeight, Qt::darkBlue);
                 painter.setPen(Qt::white);
             } else {
@@ -289,12 +325,10 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
                 painter.setFont(originalFont); // Set original font for other positions
             }
 
-            QString hex = QString("%1").arg((unsigned char)m_data[pos], 2, 16, QChar('0')).toUpper();
+            QString hex = QString("%1").arg((unsigned char)data_visible[pos - visibleStart], 2, 16, QChar('0')).toUpper();
             painter.drawText(addressAreaWidth + byte * 3 * charWidth - horizontalOffset, headerHeight + (line - startLine + 1) * charHeight, hex);
         }
     }
-
-
 }
 
 void HexEditor::drawAsciiArea(QPainter &painter, quint64 startLine, int horizontalOffset)
@@ -305,21 +339,17 @@ void HexEditor::drawAsciiArea(QPainter &painter, quint64 startLine, int horizont
     for (quint64 line = startLine; line <= endLine; ++line) {
         for (quint64 byte = 0; byte < bytesPerLine; ++byte) {
             quint64 pos = line * bytesPerLine + byte;
-            if (pos >= m_data.size())
-                return;
+            if (pos - visibleStart >= static_cast<quint64>(data_visible.size())) return;
 
-            if (selection.first != -1 && pos >= selection.first && pos <= selection.second) {
+            if (selectedOffsets.contains(pos)) {
                 painter.fillRect(addressAreaWidth + hexAreaWidth + byte * charWidth - horizontalOffset, headerHeight + (line - startLine) * charHeight, charWidth, charHeight, Qt::darkBlue);
                 painter.setPen(Qt::white);
             } else {
                 painter.setPen(Qt::black);
             }
 
-            char ch = m_data[pos];
-            if ((ch < 32) || (ch > 126))
-                ch = '.';
-
-
+            char ch = data_visible[pos - visibleStart];
+            if ((ch < 32) || (ch > 126)) ch = '.';
 
             painter.drawText(addressAreaWidth + hexAreaWidth + byte * charWidth - horizontalOffset, headerHeight + (line - startLine + 1) * charHeight, QChar(ch));
         }
@@ -394,7 +424,7 @@ void HexEditor::onCopy()
 
     QString selectedText;
     for (quint64 i = start; i <= end; ++i) {
-        selectedText.append(QString("%1").arg((unsigned char)m_data[i], 2, 16, QChar('0')).toUpper()).append(' ');
+        selectedText.append(QString("%1").arg((unsigned char)data_visible[i], 2, 16, QChar('0')).toUpper()).append(' ');
     }
 
     QClipboard *clipboard = QGuiApplication::clipboard();
@@ -407,26 +437,34 @@ void HexEditor::changeBytesPerLine(quint64 newBytesPerLine)
     hexAreaWidth = charWidth * 3 * bytesPerLine;
     asciiAreaWidth = charWidth * bytesPerLine;
     updateScrollbar();
+    updateVisibleData();
     viewport()->update();
 }
 
 void HexEditor::updateCursorBlink()
 {
-    cursorVisible = !cursorVisible;
-    viewport()->update();
+    cursorBlinkState = !cursorBlinkState;
+    viewport()->update();  // Repaint the viewport to update the cursor blink state
 }
 
 void HexEditor::clearSelection()
 {
     selection.first = -1;
     selection.second = -1;
+    selectedOffsets.clear();
     viewport()->update();
 }
-
 void HexEditor::drawCursor(QPainter &painter)
 {
+    if (!cursorBlinkState) {
+        return;  // Skip drawing the cursor if the blink state is off
+    }
+
+    // Calculate row and column based on the cursor position
     quint64 row = cursorPosition / bytesPerLine;
     quint64 col = cursorPosition % bytesPerLine;
+
+    // Calculate x and y positions based on row and column
     int x = addressAreaWidth + col * 3 * charWidth - horizontalScrollBar()->value();
     int y = headerHeight + (row - verticalScrollBar()->value()) * charHeight;
 
@@ -434,17 +472,29 @@ void HexEditor::drawCursor(QPainter &painter)
     painter.drawLine(x, y + charHeight + 2, x + charWidth, y + charHeight + 2); // Draw a line below the character
 }
 
+
+
+
+
 void HexEditor::setCursorPosition(quint64 position)
 {
     cursorPosition = position;
+    cursorByteOffset = position; // Store the cursor byte offset
     clearSelection(); // Clear the selection when the cursor position changes
     emit selectionChanged(QByteArray(), cursorPosition, cursorPosition); // Emit the signal with an empty QByteArray for selection
     viewport()->update();
 }
+
 
 void HexEditor::ensureCursorVisible()
 {
     quint64 lines = (cursorPosition / bytesPerLine);
     verticalScrollBar()->setValue(lines);
     viewport()->update();
+}
+
+void HexEditor::scrollContentsBy(int dx, int dy)
+{
+    QAbstractScrollArea::scrollContentsBy(dx, dy);
+    updateVisibleData();
 }

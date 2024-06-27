@@ -17,4 +17,9 @@
 <qresource prefix="/">
    <file>icons/jump.png</file>
 </qresource>
+
+
+<qresource prefix="/">
+   <file>icons/loading.gif</file>
+</qresource>
 </RCC>

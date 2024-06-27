@@ -16,7 +16,14 @@
 #include <QScrollBar>
 #include <QVector>
 #include "hexeditor.h"
-
+#include "filesystemhandler.h"
+#include <QDir>
+#include <QModelIndex>
+#include <QMap>
+#include "markerstablemodel.h"
+#include "loadingdialog.h"
+//#include "filesystemtabwidget.h"
+#include "filesystemtablemodel.h"
 
 
 namespace Ui {
@@ -40,10 +47,34 @@ private slots:
     void onBytesPerLineChanged(int index);
     void onGoToOffsetClicked();
 
+    void on_readAsImageButton_clicked();
+    void onFileSystemSearchButtonClicked();
+    void onFileSystemClearButtonClicked();
+    void onTableRowRightClicked(const QPoint &pos);
+    void onExportAction(const QModelIndex &index);
+    void onOpenExternalAction(const QModelIndex &index);
+    void onRefreshButtonClicked();
+
+
+
 private:
+
     Ui::HexViewerForm *ui;
+    MarkersTableModel *markersTableModel;
+    FileSystemTableModel *fileSystemTableModel;
 
+    FileSystemHandler *fsHandler;
+    void onTableRowDoubleClicked(const QModelIndex &index);
+     QMap<int, QString> currentDirMap;
+     QMap<int, int> tabPartitionMap;
 
+     void populateMarkersTable();
+     void exportDirectoryContents(int partitionIndex, const QString &sourcePath, const QString &destinationPath);
+
+     QModelIndex contextMenuIndex;
+     LoadingDialog *loadingDialog;
+
+    QString m_fileName;
 
 };
 

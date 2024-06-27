@@ -94,7 +94,7 @@ void DataTypeViewModel::updateData(const QByteArray &data)
 
     // Safe extraction and conversion of data
     auto safeMid = [&](quint64 offset, quint64 size) -> QByteArray {
-        if (offset + size <= data.size()) {
+        if (offset + size <= static_cast<quint64>(data.size())) {
             return data.mid(offset, size);
         }
         return QByteArray();

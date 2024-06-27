@@ -37,7 +37,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         hexviewerform.ui
         ${CMAKE_SOURCE_DIR}/headers/datatypeviewmodel.h
         datatypeviewmodel.cpp
-        sumuri.qrc
         headers/hexeditor.h
         hexeditor.cpp
          ${CMAKE_SOURCE_DIR}/headers/openingdialog.h
@@ -46,7 +45,20 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
          ${CMAKE_SOURCE_DIR}/headers/gotooffsetdialog.h
         gotooffsetdialog.cpp
         gotooffsetdialog.ui
-
+        headers/filesystemtabwidget.h
+        filesystemtabwidget.cpp
+        headers/filesystemtablemodel.h
+        filesystemtablemodel.cpp
+        ${CMAKE_SOURCE_DIR}/headers/filesystemhandler.h
+        filesystemhandler.cpp
+        headers/MarkersTableModel.h
+        MarkersTableModel.cpp
+        headers/FileSystemException.h
+        headers/LoadingDialog.h
+        LoadingDialog.cpp
+        sumuri.qrc
+        headers/testfilesystemhandler.h
+        testfilesystemhandler.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET SumuriHexViewerVersion1 APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -122,8 +134,22 @@ else()
     message(STATUS "Additional library (LIB_ZLIB) found: ${LIB_ZLIB}")
 endif()
 
+find_library(LIB_CRYPTO NAMES crypto libcrypto  HINTS   ${ADDITIONAL_LIBS_DIR})
+if(NOT LIB_CRYPTO)
+    message(FATAL_ERROR "Additional library (LIB_CRYPTO) not found at ${ADDITIONAL_LIBS_DIR}")
+else()
+    message(STATUS "Additional library (LIB_CRYPTO) found: ${LIB_CRYPTO}")
+endif()
 
-target_link_libraries(SumuriHexViewerVersion1 PRIVATE Qt${QT_VERSION_MAJOR}::Widgets  ${TSK_LIB} ${LIB_EWF} ${LIB_VMDK} ${LIB_VHDI} ${LIB_ZLIB} )
+find_library(LIB_SSL NAMES ssl libssl  HINTS   ${ADDITIONAL_LIBS_DIR})
+if(NOT LIB_SSL)
+    message(FATAL_ERROR "Additional library (LIB_SSL) not found at ${ADDITIONAL_LIBS_DIR}")
+else()
+    message(STATUS "Additional library (LIB_SSL) found: ${LIB_SSL}")
+endif()
+
+
+target_link_libraries(SumuriHexViewerVersion1 PRIVATE Qt${QT_VERSION_MAJOR}::Widgets  ${TSK_LIB} ${LIB_EWF} ${LIB_VMDK} ${LIB_VHDI} ${LIB_ZLIB} ${LIB_CRYPTO} ${LIB_SSL})
 
 if(WIN32)
     target_link_libraries(SumuriHexViewerVersion1 PRIVATE shlwapi)

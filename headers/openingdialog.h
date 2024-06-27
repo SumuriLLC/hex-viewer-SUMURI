@@ -3,6 +3,8 @@
 
 #include <QDialog>
 #include <QAbstractButton>
+#include "loadingdialog.h"
+
 
 namespace Ui {
 class OpeningDialog;
@@ -24,6 +26,8 @@ private slots:
 
 private:
     Ui::OpeningDialog *ui;
+     LoadingDialog *loadingDialog;
+
 };
 
 #endif // OPENINGDIALOG_H

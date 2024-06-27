@@ -74,6 +74,11 @@ A tool used to help teach students about hexadecimal data
 3. **Run the Project:**
    - Run the project by clicking on the run button or pressing `Ctrl+R`.
 
+4. **Creating the windows installer**
+    - Download Inno Setup from https://jrsoftware.org/isdl.php
+    - Build the project
+    - Run `windows_install_creator.iss`
+
 ## Additional Information
 
 - **Documentation:** Refer to the [Qt Documentation](https://doc.qt.io/) for more information on using Qt.
