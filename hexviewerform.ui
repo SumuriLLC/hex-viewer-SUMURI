@@ -172,7 +172,10 @@
      </item>
     </layout>
    </item>
-   <item row="1" column="0" colspan="2" alignment="Qt::AlignTop">
+   <item row="2" column="0">
+    <widget class="HexEditor" name="hexEditorWidget" native="true"/>
+   </item>
+   <item row="1" column="0" colspan="2">
     <widget class="QTabWidget" name="tagstabWidget">
      <property name="minimumSize">
       <size>
@@ -181,7 +184,7 @@
       </size>
      </property>
      <property name="currentIndex">
-      <number>3</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tagsTab">
       <property name="toolTip">
@@ -196,7 +199,7 @@
          <x>10</x>
          <y>10</y>
          <width>871</width>
-         <height>101</height>
+         <height>211</height>
         </rect>
        </property>
       </widget>
@@ -204,7 +207,7 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>120</y>
+         <y>230</y>
          <width>363</width>
          <height>31</height>
         </rect>
@@ -250,50 +253,73 @@
         <rect>
          <x>10</x>
          <y>10</y>
-         <width>691</width>
-         <height>111</height>
+         <width>1081</width>
+         <height>241</height>
         </rect>
        </property>
       </widget>
       <widget class="QWidget" name="layoutWidget2">
        <property name="geometry">
         <rect>
-         <x>20</x>
-         <y>120</y>
+         <x>10</x>
+         <y>270</y>
          <width>647</width>
          <height>31</height>
         </rect>
        </property>
-       <layout class="QHBoxLayout" name="horizontalLayout_3">
-        <item>
-         <widget class="QPushButton" name="removeTemplateTagButton">
-          <property name="text">
-           <string>Remove Template Tags</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="exportTemplateTagButton">
-          <property name="text">
-           <string>Export Template  Data</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="exportTemplateTagsButton">
-          <property name="text">
-           <string>Export Template Tags</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="importTemplateTagsButton">
-          <property name="text">
-           <string>Import Template Tags</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <layout class="QHBoxLayout" name="horizontalLayout_3"/>
+      </widget>
+      <widget class="QPushButton" name="removeTemplateTagButton">
+       <property name="geometry">
+        <rect>
+         <x>8</x>
+         <y>270</y>
+         <width>162</width>
+         <height>29</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Remove Template Tags</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="importTemplateTagsButton">
+       <property name="geometry">
+        <rect>
+         <x>500</x>
+         <y>270</y>
+         <width>153</width>
+         <height>29</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Import Template Tags</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="exportTemplateTagsButton">
+       <property name="geometry">
+        <rect>
+         <x>342</x>
+         <y>270</y>
+         <width>151</width>
+         <height>29</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Export Template Tags</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="exportTemplateTagDataButton">
+       <property name="geometry">
+        <rect>
+         <x>177</x>
+         <y>270</y>
+         <width>158</width>
+         <height>29</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Export Template  Data</string>
+       </property>
       </widget>
      </widget>
      <widget class="QWidget" name="MarkersTab">
@@ -363,9 +389,6 @@
       </widget>
      </widget>
     </widget>
-   </item>
-   <item row="2" column="0">
-    <widget class="HexEditor" name="hexEditorWidget" native="true"/>
    </item>
   </layout>
   <widget class="QWidget" name="layoutWidget">

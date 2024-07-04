@@ -53,15 +53,17 @@ void MainWindow::openFile()
 void MainWindow::createNewTab(const QString &fileName)
 {
     HexViewerForm *hexViewerForm = new HexViewerForm(this);
-
-
-
-    hexViewerForm->openFile(fileName);
     quint64 index = ui->tabWidget->addTab(hexViewerForm, QFileInfo(fileName).fileName());
+    hexViewerForm->openFile(fileName,index);
+
     ui->tabWidget->setCurrentIndex(index);
     ui->tabWidget->setFocus();
 
     connect(hexViewerForm->hexEditor(), &HexEditor::selectionChanged, dataTypeViewModel, &DataTypeViewModel::updateData);
+    connect(hexViewerForm->hexEditor(), &HexEditor::tagNameAndLength, this, &MainWindow::onTagNameAndLength);
+
+
+
 
 }
 
@@ -73,6 +75,7 @@ void MainWindow::onTabChanged(int index)
         if (hexEditor) {
             connect(hexEditor, &HexEditor::selectionChanged, dataTypeViewModel, &DataTypeViewModel::updateData);
             connect(hexEditor, &HexEditor::selectionChanged, this, &MainWindow::onSelectionChanged);
+            connect(hexEditor, &HexEditor::tagNameAndLength, this, &MainWindow::onTagNameAndLength);
 
             dataTypeViewModel->updateData(hexEditor->getSelectedBytes());
         }
@@ -108,4 +111,16 @@ void MainWindow::onSelectionChanged(const QByteArray &selectedData, quint64 star
                                  .arg(QString::number(endOffset, 16).toUpper());
     ui->labelCursorPosition->setText(cursorPosition);
 }
+
+void MainWindow::onTagNameAndLength(const QString &tagName, quint64 length)
+{
+    QString tagInfo;
+    if (tagName.isEmpty()) {
+        tagInfo = "Tag:";
+    } else {
+        tagInfo = QString("Tag: %1 (Length: %2)").arg(tagName).arg(length);
+    }
+    ui->labelTagName->setText(tagInfo);
+}
+
 

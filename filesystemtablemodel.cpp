@@ -8,7 +8,7 @@ FileSystemTableModel::FileSystemTableModel(QObject *parent)
     QFileIconProvider iconProvider;
     fileIcon = iconProvider.icon(QFileIconProvider::File);
     folderIcon = iconProvider.icon(QFileIconProvider::Folder);
-    headers << "Name" << "File Path" << "File Size" << "Creation Date" << "Modification Date" << "Last Access Date" << "Inode No." << "Cluster Number";
+    headers << "Name" << "File Path" << "File Size" << "Creation Date" << "Modification Date" << "Last Access Date" << "Inode No." << "Cluster Number" << "Type";
 }
 
 void FileSystemTableModel::setFileData(const QList<QStringList> &data)
@@ -37,6 +37,8 @@ QVariant FileSystemTableModel::data(const QModelIndex &index, int role) const
 
     const QStringList &entry = fileData.at(index.row());
 
+
+
     if (role == Qt::DisplayRole) {
         int column = index.column();
         if (column >= 2) // Adjusting for the missing "Type" column
@@ -44,10 +46,9 @@ QVariant FileSystemTableModel::data(const QModelIndex &index, int role) const
         return entry.at(column);
     } else if (role == Qt::DecorationRole && index.column() == 0) {
         return entry.at(2) == "Directory" ? folderIcon : fileIcon;
-    }else if (role == Qt::UserRole && index.column() == 0) {
+    }else if (role == Qt::UserRole) {
         return  entry.at(2); // Store the file type in a custom role
     }
-
 
     return QVariant();
 }

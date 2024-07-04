@@ -9,8 +9,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Sql)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Sql)
 
 set(ADDITIONAL_LIBS_DIR ${CMAKE_SOURCE_DIR}/libs/tsk/additionallibs)
 
@@ -24,7 +24,6 @@ set(PROJECT_SOURCES
         ${CMAKE_SOURCE_DIR}/headers/mainwindow.h
         mainwindow.ui
         ${TS_FILES}
-
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
@@ -39,10 +38,10 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         datatypeviewmodel.cpp
         headers/hexeditor.h
         hexeditor.cpp
-         ${CMAKE_SOURCE_DIR}/headers/openingdialog.h
+        ${CMAKE_SOURCE_DIR}/headers/openingdialog.h
         openingdialog.cpp
         openingdialog.ui
-         ${CMAKE_SOURCE_DIR}/headers/gotooffsetdialog.h
+        ${CMAKE_SOURCE_DIR}/headers/gotooffsetdialog.h
         gotooffsetdialog.cpp
         gotooffsetdialog.ui
         headers/filesystemtabwidget.h
@@ -59,20 +58,26 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         sumuri.qrc
         headers/testfilesystemhandler.h
         testfilesystemhandler.cpp
+        headers/tagshandler.h
+        tagshandler.cpp
+         ${CMAKE_SOURCE_DIR}/headers/newtagdialog.h
+        newtagdialog.cpp
+        newtagdialog.ui
+        headers/tag.h
+        headers/tagstablemodel.h
+        tagstablemodel.cpp
+        headers/tagdialogmodel.h
+        tagdialogmodel.cpp
+        libs/tags_sql.sql
+        headers/ewfdevice.h
+        ewfdevice.cpp
     )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET SumuriHexViewerVersion1 APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
-
     qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 else()
     if(ANDROID)
         add_library(SumuriHexViewerVersion1 SHARED
             ${PROJECT_SOURCES}
         )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
         add_executable(SumuriHexViewerVersion1
             ${PROJECT_SOURCES}
@@ -112,7 +117,6 @@ else()
     message(STATUS "Additional library (libewf) found: ${LIB_EWF}")
 endif()
 
-
 find_library(LIB_VMDK NAMES vmdk libvmdk  HINTS   ${ADDITIONAL_LIBS_DIR})
 if(NOT LIB_VMDK)
     message(FATAL_ERROR "Additional library (LIB_VMDK) not found at ${ADDITIONAL_LIBS_DIR}")
@@ -127,37 +131,51 @@ else()
     message(STATUS "Additional library (LIB_VHDI) found: ${LIB_VHDI}")
 endif()
 
-find_library(LIB_ZLIB NAMES zlibd   HINTS   ${ADDITIONAL_LIBS_DIR})
+# Debug and Release versions of additional libraries
+find_library(LIB_ZLIB_RELEASE NAMES zlib   HINTS   ${ADDITIONAL_LIBS_DIR})
+find_library(LIB_ZLIB_DEBUG NAMES zlibd zlib   HINTS   ${ADDITIONAL_LIBS_DIR})
+find_library(LIB_CRYPTO_RELEASE NAMES crypto libcrypto  HINTS   ${ADDITIONAL_LIBS_DIR})
+find_library(LIB_CRYPTO_DEBUG NAMES cryptod crypto libcrypto  HINTS   ${ADDITIONAL_LIBS_DIR})
+find_library(LIB_SSL_RELEASE NAMES ssl libssl  HINTS   ${ADDITIONAL_LIBS_DIR})
+find_library(LIB_SSL_DEBUG NAMES ssld ssl libssl  HINTS   ${ADDITIONAL_LIBS_DIR})
+
+# Link different libraries depending on the build type
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+    set(LIB_ZLIB ${LIB_ZLIB_DEBUG})
+    set(LIB_CRYPTO ${LIB_CRYPTO_DEBUG})
+    set(LIB_SSL ${LIB_SSL_DEBUG})
+else()
+    set(LIB_ZLIB ${LIB_ZLIB_RELEASE})
+    set(LIB_CRYPTO ${LIB_CRYPTO_RELEASE})
+    set(LIB_SSL ${LIB_SSL_RELEASE})
+endif()
+
 if(NOT LIB_ZLIB)
-    message(FATAL_ERROR "Additional library (LIB_ZLIB) not found at ${ADDITIONAL_LIBS_DIR}")
+    message(FATAL_ERROR "ZLIB library not found")
 else()
-    message(STATUS "Additional library (LIB_ZLIB) found: ${LIB_ZLIB}")
+    message(STATUS "ZLIB library found: ${LIB_ZLIB}")
 endif()
 
-find_library(LIB_CRYPTO NAMES crypto libcrypto  HINTS   ${ADDITIONAL_LIBS_DIR})
 if(NOT LIB_CRYPTO)
-    message(FATAL_ERROR "Additional library (LIB_CRYPTO) not found at ${ADDITIONAL_LIBS_DIR}")
+    message(FATAL_ERROR "Crypto library not found")
 else()
-    message(STATUS "Additional library (LIB_CRYPTO) found: ${LIB_CRYPTO}")
+    message(STATUS "Crypto library found: ${LIB_CRYPTO}")
 endif()
 
-find_library(LIB_SSL NAMES ssl libssl  HINTS   ${ADDITIONAL_LIBS_DIR})
 if(NOT LIB_SSL)
-    message(FATAL_ERROR "Additional library (LIB_SSL) not found at ${ADDITIONAL_LIBS_DIR}")
+    message(FATAL_ERROR "SSL library not found")
 else()
-    message(STATUS "Additional library (LIB_SSL) found: ${LIB_SSL}")
+    message(STATUS "SSL library found: ${LIB_SSL}")
 endif()
 
+target_link_libraries(SumuriHexViewerVersion1 PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Sql  ${LIB_EWF} ${TSK_LIB} ${LIB_VMDK} ${LIB_VHDI} ${LIB_ZLIB} ${LIB_CRYPTO} ${LIB_SSL})
 
-target_link_libraries(SumuriHexViewerVersion1 PRIVATE Qt${QT_VERSION_MAJOR}::Widgets  ${TSK_LIB} ${LIB_EWF} ${LIB_VMDK} ${LIB_VHDI} ${LIB_ZLIB} ${LIB_CRYPTO} ${LIB_SSL})
+
+
 
 if(WIN32)
     target_link_libraries(SumuriHexViewerVersion1 PRIVATE shlwapi)
 endif()
-
-
-
-
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

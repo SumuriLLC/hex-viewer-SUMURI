@@ -27,6 +27,9 @@ public:
     bool openImageAsFileSystem();
     QByteArray readFileContents(int partitionIndex, const QString &filePath);
     void exportFileContents(int partitionIndex, const QString &filePath, const QString &destinationPath);
+    quint64 getFileOffset(int partitionIndex, const QString &filePath) ;
+    quint64 getPartitionMftFileLocation(int partitionIndex);
+
 
 private:
     TSK_IMG_INFO *img;

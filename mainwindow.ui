@@ -128,6 +128,18 @@
        </widget>
       </item>
       <item>
+       <widget class="QLabel" name="labelTagName">
+        <property name="font">
+         <font>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="text">
+         <string>Tag:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <layout class="QVBoxLayout" name="verticalLayout">
         <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
          <widget class="QLabel" name="logo">

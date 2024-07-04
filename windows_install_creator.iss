@@ -43,20 +43,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "build\Desktop_Qt_6_7_1_MSVC2019_64bit-Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AdditionalLibPath}\libcrypto-1_1-x64.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AdditionalLibPath}\libewf.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AdditionalLibPath}\libssl-1_1-x64.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AdditionalLibPath}\libvhdi.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AdditionalLibPath}\libvmdk.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#QTLibPath}\Qt6Core.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#QTLibPath}\Qt6Gui.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#QTLibPath}\Qt6Widgets.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "sumuri.qrc"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AdditionalLibPath}\zlib.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#AdditionalLibPath}\zlibd.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#QTLibPath}\platforms\*"; DestDir: "{app}\platforms\"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#QTLibPath}\styles\*"; DestDir: "{app}\styles\"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#AdditionalLibPath}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#QTLibPath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "database\*"; DestDir: "{app}"; Flags: ignoreversion 
 Source: "icons\*"; DestDir: "{app}\icons\"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "libs\vcpp_redistibutable\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: ignoreversion
+
 
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
@@ -74,4 +66,5 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/quiet /norestart"; Flags: waituntilterminated
 

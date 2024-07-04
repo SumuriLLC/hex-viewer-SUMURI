@@ -24,7 +24,7 @@ private slots:
     void onEndianCheckboxStateChanged(quint64 state);
     void onTabChanged(int index);
     void onSelectionChanged(const QByteArray &selectedData, quint64 startOffset, quint64 endOffset);
-
+    void onTagNameAndLength(const QString &tagName, quint64 length);
 
 private:
     Ui::MainWindow *ui;

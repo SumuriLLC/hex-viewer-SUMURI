@@ -166,7 +166,9 @@ QList<QStringList> FileSystemHandler::listFilesInDirectory(int partitionIndex, c
                            << QDateTime::fromSecsSinceEpoch(file->meta->mtime).toLocalTime().toString("yyyy-MM-dd hh:mm:ss")
                            << QDateTime::fromSecsSinceEpoch(file->meta->atime).toLocalTime().toString("yyyy-MM-dd hh:mm:ss")
                            << QString::number(file->meta->addr)
-                           << QString::number(file->meta->seq);
+                           << QString::number(file->meta->seq)
+                           << fileType;
+
 
             fileList.append(fileAttributes);
 
@@ -309,4 +311,97 @@ void FileSystemHandler::exportFileContents(int partitionIndex, const QString &fi
 
     outFile.write(fileData);
     outFile.close();
+}
+
+quint64 FileSystemHandler::getFileOffset(int partitionIndex, const QString &filePath)
+{
+    qDebug() << "Going to file offset partitionIndex" << partitionIndex << " for path " << filePath;
+
+    TSK_FS_INFO *fs = getFileSystem(partitionIndex);
+    if (!fs) {
+        throw FileSystemException("Invalid file system");
+    }
+
+    TSK_FS_FILE *file = tsk_fs_file_open(fs, nullptr, filePath.toStdString().c_str());
+    if (!file) {
+        throw FileSystemException("Failed to open file: " + filePath);
+    }
+
+    quint64 offset = 0;
+    quint64 offset_start=0;
+    const int ntfs_entry_chunk_size=1024;
+    quint64 partition_offset=fs->offset;
+
+
+    if (file->meta) {
+
+
+            if (fs->ftype == TSK_FS_TYPE_NTFS) {
+                offset_start=getPartitionMftFileLocation(partitionIndex);
+
+
+                offset =  partition_offset + offset_start + (file->meta->addr * ntfs_entry_chunk_size);
+
+            }else{
+
+                offset = partition_offset +  (file->meta->addr * fs->block_size);
+            }
+
+            qDebug() << "partition_offset:"<< partition_offset;
+
+            qDebug()<< "offset_start" << offset_start;
+
+            qDebug()<< "file->meta->addr" << file->meta->addr;
+
+            qDebug()<< "offset" << offset;
+
+
+    }
+
+
+    tsk_fs_file_close(file);
+
+    return offset;
+}
+
+
+quint64 FileSystemHandler::getPartitionMftFileLocation(int partitionIndex)
+{
+    TSK_FS_INFO *fs = getFileSystem(partitionIndex);
+    if (!fs) {
+        throw FileSystemException("Invalid file system");
+    }
+
+    // Ensure the file system is NTFS
+    if (fs->ftype != TSK_FS_TYPE_NTFS) {
+        throw FileSystemException("Not an NTFS file system");
+    }
+
+    // Open the MFT file, which is the first file in the NTFS file system (inode 0)
+    TSK_FS_FILE *mftFile = tsk_fs_file_open_meta(fs, nullptr, 0);
+    if (!mftFile) {
+        throw FileSystemException("Failed to open MFT file: " + getLastError());
+    }
+
+    // Get the location of the MFT file
+    quint64 mftLocation = 0;
+    if (mftFile->meta && mftFile->meta->attr) {
+        TSK_FS_ATTR *attr;
+        for (attr = mftFile->meta->attr->head; attr; attr = attr->next) {
+            if (attr->type == TSK_FS_ATTR_TYPE_NTFS_DATA) {
+                if (attr->nrd.run) {
+                    mftLocation = attr->nrd.run->addr * fs->block_size;
+                    break;
+                }
+            }
+        }
+    }
+
+    tsk_fs_file_close(mftFile);
+
+    if (mftLocation == 0) {
+        throw FileSystemException("Failed to determine MFT file location");
+    }
+
+    return mftLocation;
 }

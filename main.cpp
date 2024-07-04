@@ -8,7 +8,7 @@
 #include <QMessageBox>
 #include <QIcon>
 
-//#include "headers/testfilesystemhandler.h"
+#include "headers/testfilesystemhandler.h"
 
 int main(int argc, char *argv[])
 {
@@ -27,8 +27,8 @@ int main(int argc, char *argv[])
     }
 
     //////////////////////////Testing Sandbox/////////////////////////////////
-   // TestFileSystemHandler testHandler;
-   // testHandler.runTests();
+    TestFileSystemHandler testHandler;
+    testHandler.runTests();
     //////////////////////////////////////////////////////////////////////////
     OpeningDialog o;
     o.show();

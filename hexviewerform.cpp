@@ -23,6 +23,9 @@ HexViewerForm::HexViewerForm(QWidget *parent)
     , markersTableModel(new MarkersTableModel(this))
     , fsHandler(new FileSystemHandler(this))
     ,loadingDialog(new LoadingDialog(this))
+    , tagsTableModel(new TagsTableModel(this))
+    ,templateTagsTableModel(new TagsTableModel(this))
+
 
 {
     qDebug() << "setup.";
@@ -34,6 +37,10 @@ HexViewerForm::HexViewerForm(QWidget *parent)
     int descriptionColumnIndex = 3;
     int currentWidth = ui->markersTableView->columnWidth(descriptionColumnIndex);
     ui->markersTableView->setColumnWidth(descriptionColumnIndex, currentWidth * 2);
+    ui->markersTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+
+
+    connect(ui->markersTableView, &QTableView::doubleClicked, this, &HexViewerForm::onMarkersTableDoubleClicked);
 
 
     ui->tagstabWidget->setVisible(false);
@@ -54,10 +61,127 @@ HexViewerForm::HexViewerForm(QWidget *parent)
     connect(ui->refreshButton, &QPushButton::clicked, this, &HexViewerForm::onRefreshButtonClicked);
 
 
+    templateTagsTableModel->setFilterType("template");
+    ui->TemplateTagstableView->setModel(templateTagsTableModel);
+    ui->TemplateTagstableView->setSelectionBehavior(QAbstractItemView::SelectRows); // Ensure rows are selected
+    connect(ui->TemplateTagstableView, &QTableView::doubleClicked, this, &HexViewerForm::onTemplateTagTableDoubleClicked);
+
+
+    tagsTableModel->setFilterType("user");
+    ui->tagsTableView->setModel(tagsTableModel);
+    ui->tagsTableView->setSelectionBehavior(QAbstractItemView::SelectRows); // Ensure rows are selected
+    connect(ui->tagsTableView, &QTableView::doubleClicked, this, &HexViewerForm::onTagTableDoubleClicked);
+
+
+    connect(ui->hexEditorWidget, &HexEditor::tagsUpdated, this, &HexViewerForm::updateTagsTable);
+
+    connect(ui->removeTagButton, &QPushButton::clicked, this, &HexViewerForm::removeSelectedTag);
+    connect(ui->removeTemplateTagButton, &QPushButton::clicked, this, &HexViewerForm::removeSelectedTemplateTag);
+
+    connect(ui->importTemplateTagsButton, &QPushButton::clicked, this, [this]() { ui->hexEditorWidget->importTags("template"); });
+    connect(ui->importTagsButton, &QPushButton::clicked, this, [this]() { ui->hexEditorWidget->importTags("user"); });
+    connect(ui->exportTemplateTagsButton, &QPushButton::clicked, this, [this]() { ui->hexEditorWidget->exportTags("template"); });
+    connect(ui->exportTagsButton, &QPushButton::clicked, this, [this]() { ui->hexEditorWidget->exportTags("user"); });
+
+    connect(ui->exportTagDataButton, &QPushButton::clicked, this, &HexViewerForm::onExportSelectedTagData);
+    connect(ui->exportTemplateTagDataButton, &QPushButton::clicked, this, &HexViewerForm::onExportSelectedTemplateTagData);
+
+
+
 }
 
+void HexViewerForm::updateTagsTable(const QVector<Tag> &tags)
+{
+    qDebug()<< "First tag" << tags.first().type;
+    tagsTableModel->setTags(tags);
+    templateTagsTableModel->setTags(tags);
+}
 
-void HexViewerForm::openFile(const QString &fileName)
+void HexViewerForm::onTagTableDoubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+
+    int row = index.row();
+    if (row < 0 || row >= tagsTableModel->rowCount())
+        return;
+
+    quint64 offset = tagsTableModel->data(tagsTableModel->index(row, 0)).toULongLong();
+    ui->hexEditorWidget->setCursorPosition(offset);
+    ui->hexEditorWidget->ensureCursorVisible();
+}
+
+void HexViewerForm::onTemplateTagTableDoubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+
+    int row = index.row();
+    if (row < 0 || row >= templateTagsTableModel->rowCount())
+        return;
+
+    quint64 offset = templateTagsTableModel->data(templateTagsTableModel->index(row, 0)).toULongLong();
+    ui->hexEditorWidget->setCursorPosition(offset);
+    ui->hexEditorWidget->ensureCursorVisible();
+}
+
+void HexViewerForm::removeSelectedTemplateTag()
+{
+    QModelIndex selectedIndex = ui->TemplateTagstableView->currentIndex();
+    if (!selectedIndex.isValid()) return;
+
+    quint64 offset = ui->TemplateTagstableView->model()->data(ui->TemplateTagstableView->model()->index(selectedIndex.row(), 0)).toULongLong();
+    ui->hexEditorWidget->removeTag(offset, selectedIndex.row());
+}
+
+void HexViewerForm::removeSelectedTag()
+{
+    QModelIndex selectedIndex = ui->tagsTableView->currentIndex();
+    if (!selectedIndex.isValid()) return;
+
+    quint64 offset = ui->tagsTableView->model()->data(ui->tagsTableView->model()->index(selectedIndex.row(), 0)).toULongLong();
+    ui->hexEditorWidget->removeTag(offset, selectedIndex.row());
+}
+
+void HexViewerForm::onExportSelectedTagData()
+{
+    // Get the selected tag's offset from the table view
+    QModelIndexList selectedIndexes = ui->tagsTableView->selectionModel()->selectedIndexes();
+    if (!selectedIndexes.isEmpty()) {
+        int selectedRow = selectedIndexes.first().row();
+        quint64 offset = ui->tagsTableView->model()->data(ui->tagsTableView->model()->index(selectedRow, 0)).toULongLong();
+
+        // Ask the user for the file name to save the data
+        QString fileName = QFileDialog::getSaveFileName(this, tr("Save Tag Data"), "", tr("Text Files (*.txt);;All Files (*)"));
+        if (fileName.isEmpty()) return;
+
+        // Export the tag data to a file
+        ui->hexEditorWidget->exportTagDataByOffset(offset, fileName);
+    } else {
+        qDebug() << "No tag selected.";
+    }
+}
+
+void HexViewerForm::onExportSelectedTemplateTagData()
+{
+    // Get the selected tag's offset from the table view
+    QModelIndexList selectedIndexes = ui->TemplateTagstableView->selectionModel()->selectedIndexes();
+    if (!selectedIndexes.isEmpty()) {
+        int selectedRow = selectedIndexes.first().row();
+        quint64 offset = ui->TemplateTagstableView->model()->data(ui->TemplateTagstableView->model()->index(selectedRow, 0)).toULongLong();
+
+        // Ask the user for the file name to save the data
+        QString fileName = QFileDialog::getSaveFileName(this, tr("Save Tag Data"), "", tr("Text Files (*.txt);;All Files (*)"));
+        if (fileName.isEmpty()) return;
+
+        // Export the tag data to a file
+        ui->hexEditorWidget->exportTagDataByOffset(offset, fileName);
+    } else {
+        qDebug() << "No tag selected.";
+    }
+}
+
+void HexViewerForm::openFile(const QString &fileName,int tabIndex)
 {
 
     loadingDialog->setMessage("Loading , please wait...");
@@ -66,25 +190,14 @@ void HexViewerForm::openFile(const QString &fileName)
 
     HexEditor *hexEditor = ui->hexEditorWidget;
 
-  m_fileName = QDir::toNativeSeparators(fileName);
+    m_fileName = QDir::toNativeSeparators(fileName);
+
+
+    TagsHandler *tagsHandler = new TagsHandler("tags_database.db", "connection_" + QString::number(tabIndex));
+
+    hexEditor->setTagsHandler(tagsHandler);
+
     hexEditor->setData(m_fileName);
-
-
-
-/*
-    QFile file(m_fileName);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, tr("Error"), tr("Failed to open file"));
-        delete hexEditor;
-        return;
-    }
-
-
-
-    QByteArray fileData = file.readAll();
-    hexEditor->setData(fileData);
-
-    */
 
     hexEditor->setSelectedByte(0);
 
@@ -129,7 +242,7 @@ void HexViewerForm::onGoToOffsetClicked()
         if (newOffset < ui->hexEditorWidget->fileSize) {
             ui->hexEditorWidget->clearSelection();
             ui->hexEditorWidget->setSelectedByte(newOffset);
-          //  ui->hexEditorWidget->ensureCursorVisible();
+            //  ui->hexEditorWidget->ensureCursorVisible();
         }
     }
 }
@@ -148,10 +261,10 @@ void HexViewerForm::on_readAsImageButton_clicked()
     qApp->processEvents();
 
 
-   //  QString fileName = "O:\\test_disk_images\\debian-12.5.0-amd64-netinst.iso";  //OK
+    //  QString fileName = "O:\\test_disk_images\\debian-12.5.0-amd64-netinst.iso";  //OK
 
-  // m_fileName = "O:\\test_disk_images\\ntfs1-gen0.E01";  // OK
-  // m_fileName = "O:\\test_disk_images\ntfs1-gen0.E01";  // OK
+    // m_fileName = "O:\\test_disk_images\\ntfs1-gen0.E01";  // OK
+    // m_fileName = "O:\\test_disk_images\ntfs1-gen0.E01";  // OK
 
     // QString fileName = "O:\\test_disk_images\\dd_example.dd";
 
@@ -240,31 +353,34 @@ void HexViewerForm::onTableRowDoubleClicked(const QModelIndex &index)
     if (!index.isValid())
         return;
 
-    QTableView *tableView = qobject_cast<QTableView *>(sender());
+    QTableView *tableView = qobject_cast<QTableView *>(ui->FileSystemTabWidget->currentWidget()->findChild<QTableView *>());
     if (!tableView)
         return;
 
-   // qDebug() << "Double-clicked tableView ok :" << tableView;
+    // qDebug() << "Double-clicked tableView ok :" << tableView;
 
     FileSystemTableModel *model = qobject_cast<FileSystemTableModel *>(tableView->model());
     if (!model)
         return;
 
-   // qDebug() << "Double-clicked model ok :" << model;
+    // qDebug() << "Double-clicked model ok :" << model;
 
-    QStringList fileAttributes;
+    /* QStringList fileAttributes;
     int columnCount = model->columnCount();
     for (int col = 0; col < columnCount; ++col) {
         QModelIndex colIndex = model->index(index.row(), col);
         fileAttributes << model->data(colIndex, Qt::DisplayRole).toString();
     }
+*/
+    // qDebug() << "Double-clicked fileAttributes ok :" << fileAttributes;
 
-   // qDebug() << "Double-clicked fileAttributes ok :" << fileAttributes;
 
+    QString filePath = model->data(model->index(index.row(), 1), Qt::DisplayRole).toString();
+    QString fileType = model->data(model->index(index.row(), 8), Qt::DisplayRole).toString();
 
+    qDebug() << "filePath:" << filePath << "fileType:" << fileType <<model->data(model->index(index.row(), Qt::DisplayRole));
+    //    QString fileType = model->data(model->index(contextMenuIndex.row(), Qt::UserRole)).toString();
 
-    QString filePath = fileAttributes.at(1);
-    QString fileType = model->data(index, Qt::UserRole).toString();
 
     int tabIndex = ui->FileSystemTabWidget->currentIndex();
     int partitionIndex = tabPartitionMap.value(tabIndex, -1);
@@ -402,16 +518,20 @@ void HexViewerForm::onTableRowRightClicked(const QPoint &pos)
 
 
     QMenu contextMenu;
+    QAction *goToMFTAction = contextMenu.addAction("Goto $MFT entry");
     QAction *exportAction = contextMenu.addAction("Export");
     QAction *openExternalAction = contextMenu.addAction("Open File as External Viewer");
-   // QAction *exportZipAction = contextMenu.addAction("Export as zip");
+    // QAction *exportZipAction = contextMenu.addAction("Export as zip");
 
     if (fileName == "." || fileName == "..") {
         exportAction->setEnabled(false);
         openExternalAction->setEnabled(false);
+        goToMFTAction->setEnabled(false);
     } else {
         connect(exportAction, &QAction::triggered, [this, index] { onExportAction(index); });
         connect(openExternalAction, &QAction::triggered, [this, index] { onOpenExternalAction(index); });
+        connect(goToMFTAction, &QAction::triggered, [this, index] { onGoToMFTAction(index); });
+
     }
     contextMenu.exec(tableView->viewport()->mapToGlobal(pos));
 }
@@ -553,6 +673,8 @@ void HexViewerForm::onOpenExternalAction(const QModelIndex &index)
     try {
         fsHandler->exportFileContents(partitionIndex, filePath, destinationPath);
         QDesktopServices::openUrl(QUrl::fromLocalFile(destinationPath));
+        loadingDialog->hide();
+
     } catch (const FileSystemException &e) {
         loadingDialog->hide();
 
@@ -562,10 +684,84 @@ void HexViewerForm::onOpenExternalAction(const QModelIndex &index)
     loadingDialog->hide();
 }
 
+
+
+void HexViewerForm::onGoToMFTAction(const QModelIndex &index){
+    qDebug() << "onGoToMFTAction:" << index;
+
+    loadingDialog->setMessage("Loading , please wait...");
+    loadingDialog->show();
+    qApp->processEvents();
+
+
+
+    if (!contextMenuIndex.isValid())
+        return;
+
+    int tabIndex = ui->FileSystemTabWidget->currentIndex();
+    int partitionIndex = tabPartitionMap.value(tabIndex, -1);
+    if (partitionIndex == -1)
+        return;
+
+    QTableView *tableView = qobject_cast<QTableView *>(ui->FileSystemTabWidget->currentWidget()->findChild<QTableView *>());
+    if (!tableView)
+        return;
+
+    FileSystemTableModel *model = qobject_cast<FileSystemTableModel *>(tableView->model());
+    if (!model)
+        return;
+
+    QString filePath = model->data(model->index(contextMenuIndex.row(), 1), Qt::DisplayRole).toString();
+    QString fileType = model->data(model->index(contextMenuIndex.row(), Qt::UserRole)).toString();
+
+    qDebug() << "fileType:" << fileType;
+
+    //   if (fileType != "Directory")
+    //       return;
+
+    try {
+        quint64 offset = fsHandler->getFileOffset(partitionIndex, filePath);
+        if (offset < ui->hexEditorWidget->fileSize) {
+            ui->hexEditorWidget->clearSelection();
+            ui->hexEditorWidget->setCursorPosition(offset);
+            ui->hexEditorWidget->ensureCursorVisible();
+        }
+    } catch (const FileSystemException &e) {
+        loadingDialog->hide();
+
+        QMessageBox::critical(this, tr("Error"), e.getMessage());
+    }
+    loadingDialog->hide();
+
+
+}
+
+
 void HexViewerForm::onRefreshButtonClicked()
 {
     ui->readAsImageButton->setDisabled(false);
 
+}
+
+
+void HexViewerForm::onMarkersTableDoubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+
+    QString offsetStr = ui->markersTableView->model()->data(ui->markersTableView->model()->index(index.row(), 0), Qt::DisplayRole).toString();
+    bool ok;
+    quint64 offset = offsetStr.toULongLong(&ok);
+    if (!ok) {
+        qDebug() << "Invalid offset value";
+        return;
+    }
+
+    if (offset < ui->hexEditorWidget->fileSize) {
+        ui->hexEditorWidget->clearSelection();
+        ui->hexEditorWidget->setCursorPosition(offset);
+        ui->hexEditorWidget->ensureCursorVisible();
+    }
 }
 
 

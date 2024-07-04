@@ -8,6 +8,10 @@
 #include <QFile>
 #include <QPair>
 #include <QSet>
+#include "tag.h"
+#include "tagshandler.h"
+#include "ewfdevice.h"
+
 
 class HexEditor : public QAbstractScrollArea
 {
@@ -26,11 +30,21 @@ public:
     QByteArray getSelectedBytes() const;
     quint64 cursorPosition;
     quint64 fileSize;
+    void addTag(quint64 offset, quint64 length, const QString &description, const QColor &color, const QString &type);
+    void removeTag(quint64 offset, int index = -1);
+    void clearTags();
 
+    void exportTags(const QString &type);
+    void importTags(const QString &tagType);
+    void exportTagDataByOffset(quint64 offset, const QString &fileName);
+    void setTagsHandler(TagsHandler *tagsHandler);
 
 
 signals:
     void selectionChanged(const QByteArray &selectedData, quint64 startOffset, quint64 endOffset);
+    void tagsUpdated(const QVector<Tag> &tags);
+    void tagNameAndLength(const QString &tagName, quint64 length);
+
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -46,6 +60,9 @@ protected:
 private slots:
     void onCopy();
     void updateCursorBlink();
+    void onTagSelectedBytes();
+    void onApplyTags(QString category);
+    void onShowTags(const QString &tagCategory);
 
 private:
     void updateScrollbar();
@@ -75,11 +92,24 @@ private:
 
     QByteArray m_data;
     QByteArray data_visible;
-    QFile file;
+    //QFile file;
     quint64 visibleStart;
     quint64 visibleEnd;
     QSet<quint64> selectedOffsets;
     quint64 cursorByteOffset;
+
+
+
+    QList<Tag> tags;
+    QIODevice *device = nullptr;
+
+    quint64 startBlockOffset;
+    bool startBlockSelected;
+
+    void onStartBlock();
+    void onEndBlock();
+
+     TagsHandler *tagsHandler;
 
 };
 

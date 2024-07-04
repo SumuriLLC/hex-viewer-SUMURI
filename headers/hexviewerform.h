@@ -24,6 +24,7 @@
 #include "loadingdialog.h"
 //#include "filesystemtabwidget.h"
 #include "filesystemtablemodel.h"
+#include "tagstablemodel.h"
 
 
 namespace Ui {
@@ -37,7 +38,7 @@ class HexViewerForm : public QWidget
 public:
     explicit HexViewerForm(QWidget *parent = nullptr);
     ~HexViewerForm();
-    void openFile(const QString &fileName);
+    void openFile(const QString &fileName,int tabIndex);
     HexEditor* hexEditor() const;
     QByteArray getSelectedData() const;
 
@@ -53,9 +54,13 @@ private slots:
     void onTableRowRightClicked(const QPoint &pos);
     void onExportAction(const QModelIndex &index);
     void onOpenExternalAction(const QModelIndex &index);
+    void onGoToMFTAction(const QModelIndex &index);
     void onRefreshButtonClicked();
-
-
+    void onMarkersTableDoubleClicked(const QModelIndex &index);
+    void removeSelectedTag();
+    void removeSelectedTemplateTag();
+    void onExportSelectedTagData();
+    void onExportSelectedTemplateTagData();
 
 private:
 
@@ -75,6 +80,14 @@ private:
      LoadingDialog *loadingDialog;
 
     QString m_fileName;
+
+    TagsTableModel *tagsTableModel;
+    TagsTableModel *templateTagsTableModel;
+
+
+    void updateTagsTable(const QVector<Tag> &tags);
+     void onTagTableDoubleClicked(const QModelIndex &index);
+    void onTemplateTagTableDoubleClicked(const QModelIndex &index);
 
 };
 

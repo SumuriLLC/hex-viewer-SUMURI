@@ -10,6 +10,14 @@
 #include <QClipboard>
 #include <QInputDialog>
 #include <QFile>
+#include "headers/newtagdialog.h"
+#include <QDebug>
+#include "headers/tagshandler.h"
+#include "headers/tagdialogmodel.h"
+
+#include <QTextStream>
+#include <QFileDialog>
+
 
 HexEditor::HexEditor(QWidget *parent)
     : QAbstractScrollArea(parent),
@@ -21,7 +29,10 @@ HexEditor::HexEditor(QWidget *parent)
  cursorBlinkState(true),
     visibleStart(0),
     visibleEnd(0),
-    cursorByteOffset(0)
+    cursorByteOffset(0),
+    tagsHandler(nullptr),
+    startBlockOffset(0),
+    startBlockSelected(false)
 {
     setFont(QFont("Courier New", 10));
     QFontMetrics fm(font());
@@ -41,17 +52,42 @@ HexEditor::HexEditor(QWidget *parent)
     cursorBlinkTimer.start();
 }
 
+void HexEditor::setTagsHandler(TagsHandler *tagsHandler)
+{
+    this->tagsHandler = tagsHandler;
+}
+
 void HexEditor::setData(const QString &filePath)
 {
-    {
-        file.setFileName(filePath);
-        if (!file.open(QIODevice::ReadOnly)) {
-            // Handle error
+    QFileInfo fileInfo(filePath);
+    delete device; // Clean up any previously used device
+
+    if (fileInfo.suffix().toUpper() == "E01") {
+        EwfDevice *ewfDevice = new EwfDevice(this);
+        if (!ewfDevice->openEwf(filePath.toStdString().c_str(), QIODevice::ReadOnly)) {
+            qDebug() << "Failed to open EWF device.";
+            delete ewfDevice;
+            device = nullptr;
             return;
         }
-        fileSize = file.size();
-        m_data.clear();
-    } // Unlock the mutex immediately after modifying m_data
+        device = ewfDevice;
+    } else {
+        // Handle regular file
+        device = new QFile(filePath, this);
+    }
+
+    if (!device->open(QIODevice::ReadOnly)) {
+        qDebug() << "Failed to open file.";
+        delete device;
+        device = nullptr;
+        return;
+    }
+
+    fileSize = device->size();
+    qDebug() << "Getting file size." << fileSize;
+
+
+    m_data.clear();
 
     updateScrollbar();
     updateVisibleData();
@@ -149,8 +185,9 @@ void HexEditor::updateVisibleData()
     visibleStart = firstLine * bytesPerLine;
     visibleEnd = qMin(fileSize, visibleStart + linesVisible * bytesPerLine);
 
-    file.seek(visibleStart);
-    data_visible = file.read(visibleEnd - visibleStart);
+    device->seek(visibleStart);
+    data_visible = device->read(visibleEnd - visibleStart);
+
 
     viewport()->update();
 }
@@ -182,6 +219,19 @@ void HexEditor::updateSelection(const QPoint &pos, bool reset)
     QByteArray selectedData = data_visible.mid(selection.first, selection.second - selection.first + 1);
     emit selectionChanged(selectedData, selection.first + visibleStart, selection.second + visibleStart);
 
+
+    QString tagName = "";
+    quint64 tagLength = 0;
+
+    for (const Tag &tag : tags) {
+        if (cursorPosition >= tag.offset && cursorPosition < tag.offset + tag.length) {
+            tagName = tag.description;
+            tagLength = tag.length;
+            break;
+        }
+    }
+
+    emit tagNameAndLength(tagName, tagLength);
     viewport()->update();
 }
 
@@ -312,12 +362,29 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
             quint64 pos = line * bytesPerLine + byte;
             if (pos - visibleStart >= static_cast<quint64>(data_visible.size())) return;
 
-            if (selectedOffsets.contains(pos)) {
-                painter.fillRect(addressAreaWidth + byte * 3 * charWidth - horizontalOffset, headerHeight + (line - startLine) * charHeight, 3 * charWidth, charHeight, Qt::darkBlue);
-                painter.setPen(Qt::white);
+            QColor backgroundColor = Qt::white;
+
+            // Check if the position is within the selected offsets first
+            bool isSelected = selectedOffsets.contains(pos);
+
+            if (isSelected) {
+                backgroundColor = Qt::darkBlue;
             } else {
-                painter.setPen(Qt::black);
+                // If not selected, check for tags
+                for (const Tag &tag : tags) {
+                    if (pos >= tag.offset && pos < tag.offset + tag.length) {
+                        backgroundColor = tag.color;
+                        break;
+                    }
+                }
             }
+
+            painter.fillRect(addressAreaWidth + byte * 3 * charWidth - horizontalOffset, headerHeight + (line - startLine) * charHeight, 3 * charWidth, charHeight, backgroundColor);
+
+            // Set the font color based on the background color's brightness
+            int brightness = (backgroundColor.red() * 299 + backgroundColor.green() * 587 + backgroundColor.blue() * 114) / 1000;
+            QColor fontColor = (brightness > 128) ? Qt::black : Qt::white;
+            painter.setPen(fontColor);
 
             if (pos == cursorPosition) {
                 painter.setFont(boldFont); // Set bold font for cursor position
@@ -341,12 +408,29 @@ void HexEditor::drawAsciiArea(QPainter &painter, quint64 startLine, int horizont
             quint64 pos = line * bytesPerLine + byte;
             if (pos - visibleStart >= static_cast<quint64>(data_visible.size())) return;
 
-            if (selectedOffsets.contains(pos)) {
-                painter.fillRect(addressAreaWidth + hexAreaWidth + byte * charWidth - horizontalOffset, headerHeight + (line - startLine) * charHeight, charWidth, charHeight, Qt::darkBlue);
-                painter.setPen(Qt::white);
+            QColor backgroundColor = Qt::white;
+
+            // Check if the position is within the selected offsets first
+            bool isSelected = selectedOffsets.contains(pos);
+
+            if (isSelected) {
+                backgroundColor = Qt::darkBlue;
             } else {
-                painter.setPen(Qt::black);
+                // If not selected, check for tags
+                for (const Tag &tag : tags) {
+                    if (pos >= tag.offset && pos < tag.offset + tag.length) {
+                        backgroundColor = tag.color;
+                        break;
+                    }
+                }
             }
+
+            painter.fillRect(addressAreaWidth + hexAreaWidth + byte * charWidth - horizontalOffset, headerHeight + (line - startLine) * charHeight, charWidth, charHeight, backgroundColor);
+
+            // Set the font color based on the background color's brightness
+            int brightness = (backgroundColor.red() * 299 + backgroundColor.green() * 587 + backgroundColor.blue() * 114) / 1000;
+            QColor fontColor = (brightness > 128) ? Qt::black : Qt::white;
+            painter.setPen(fontColor);
 
             char ch = data_visible[pos - visibleStart];
             if ((ch < 32) || (ch > 126)) ch = '.';
@@ -355,6 +439,7 @@ void HexEditor::drawAsciiArea(QPainter &painter, quint64 startLine, int horizont
         }
     }
 }
+
 
 void HexEditor::drawHeader(QPainter &painter, int horizontalOffset)
 {
@@ -386,31 +471,300 @@ void HexEditor::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu contextMenu(this);
 
+    ////////Copy Menu ////////////////
     QAction *copyAction = new QAction("Copy", this);
+    contextMenu.addAction(copyAction);
     connect(copyAction, &QAction::triggered, this, &HexEditor::onCopy);
 
+    ////////Tag Selected Bytes Menu////
     QAction *tagSelectedBytesAction = new QAction("Tag Selected Bytes", this);
-    QAction *startBlocksAction = new QAction("Start Block", this);
-    QAction *endBlockAction = new QAction("End Block", this);
-    QAction *applyTemplateAction = new QAction("Apply Template", this);
-
-    contextMenu.addAction(copyAction);
     contextMenu.addAction(tagSelectedBytesAction);
+    connect(tagSelectedBytesAction, &QAction::triggered, this, &HexEditor::onTagSelectedBytes);
+
+    ////////Start Block Menu///////////
+    QAction *startBlocksAction = new QAction("Start Block", this);
     contextMenu.addAction(startBlocksAction);
+    connect(startBlocksAction, &QAction::triggered, this, &HexEditor::onStartBlock);
+
+
+    ////////End Block Action////////////
+    QAction *endBlockAction = new QAction("End Block", this);
+    contextMenu.addAction(endBlockAction);
+    connect(endBlockAction, &QAction::triggered, this, &HexEditor::onEndBlock);
+
+
+    ////////////Show as Menu/////////////////////
 
     QMenu *showAsMenu = contextMenu.addMenu("Show as");
-    QMenu *diskStructuresMenu = showAsMenu->addMenu("Disk Structures");
 
-    QAction *mbrAction = new QAction("MBR", this);
-    QAction *gptAction = new QAction("GPT", this);
+        //Disk Structures
+        QMenu *diskStructuresMenu = showAsMenu->addMenu("Disk Structures");
 
-    diskStructuresMenu->addAction(mbrAction);
-    diskStructuresMenu->addAction(gptAction);
+            QAction *mbrAction = new QAction("MBR", this);
+            diskStructuresMenu->addAction(mbrAction);
+            connect(mbrAction, &QAction::triggered, this, [this]() { onShowTags("MBR"); });
 
-    contextMenu.addAction(endBlockAction);
-    contextMenu.addAction(applyTemplateAction);
+            QAction *gptAction = new QAction("GPT", this);
+            diskStructuresMenu->addAction(gptAction);
+            connect(gptAction, &QAction::triggered, this, [this]() { onShowTags("GPT"); });
+
+
+        //FAT
+        QMenu *showAsFATMenu = showAsMenu->addMenu("FAT");
+
+            QAction *showAsFATVBRAction = new QAction("FAT VBR", this);
+            showAsFATMenu->addAction(showAsFATVBRAction);
+            connect(showAsFATVBRAction, &QAction::triggered, this, [this]() { onShowTags("FAT VBR"); });
+
+            QAction *showAsFAT32VBRAction = new QAction("FAT32 VBR", this);
+            showAsFATMenu->addAction(showAsFAT32VBRAction);
+            connect(showAsFAT32VBRAction, &QAction::triggered, this, [this]() { onShowTags("FAT32 VBR"); });
+
+            QAction *showAsFAT32SFNAction = new QAction("FAT32 SFN Directory Entry", this);
+            showAsFATMenu->addAction(showAsFAT32SFNAction);
+            connect(showAsFAT32SFNAction, &QAction::triggered, this, [this]() { onShowTags("FAT32 SFN Directory Entry"); });
+
+
+
+
+        //exFAT
+        QMenu *showAsExFATMenu = showAsMenu->addMenu("exFAT");
+
+            QAction *showAsexFATVBRAction = new QAction("exFAT VBR", this);
+            showAsExFATMenu->addAction(showAsexFATVBRAction);
+            connect(showAsexFATVBRAction, &QAction::triggered, this, [this]() { onShowTags("exFAT VBR"); });
+
+
+        //NTFS
+        QMenu *showAsNTFSMenu = showAsMenu->addMenu("NTFS");
+
+            QAction *showAsNTFSVBRAction = new QAction("NTFS VBR", this);
+            showAsNTFSMenu->addAction(showAsNTFSVBRAction);
+            connect(showAsNTFSVBRAction, &QAction::triggered, this, [this]() { onShowTags("NTFS VBR"); });
+
+            QAction *showAsNTFSMFTaction = new QAction("NTFS MFT Entry", this);
+            showAsNTFSMenu->addAction(showAsNTFSMFTaction);
+            connect(showAsNTFSMFTaction, &QAction::triggered, this, [this]() { onShowTags("NTFS MFT Entry"); });
+
+
+            QAction *showAsNTFSRunlistaction = new QAction("NTFS Runlist Entry", this);
+            showAsNTFSMenu->addAction(showAsNTFSRunlistaction);
+            connect(showAsNTFSRunlistaction, &QAction::triggered, this, [this]() { onShowTags("NTFS Runlist Entry"); });
+
+
+        /////////////////////////////////////////////////
+
+
+
+    // Apply Template Menu
+    QMenu *applyTemplateMenu = contextMenu.addMenu("Apply Template");
+
+        // Disk Structures
+        QMenu *templateDiskStructuresMenu = applyTemplateMenu->addMenu("Disk Structures");
+            QAction *templateMbrAction = new QAction("MBR", this);
+            templateDiskStructuresMenu->addAction(templateMbrAction);
+            connect(templateMbrAction, &QAction::triggered, this, [this]() { onApplyTags("MBR"); });
+
+
+            QAction *templateGptAction = new QAction("GPT", this);
+            templateDiskStructuresMenu->addAction(templateGptAction);
+            connect(templateGptAction, &QAction::triggered, this, [this]() { onApplyTags("GPT"); });
+
+
+        // FAT
+        QMenu *fatMenu = applyTemplateMenu->addMenu("FAT");
+
+            QAction *fatVBRAction = new QAction("FAT VBR", this);
+            fatMenu->addAction(fatVBRAction);
+            connect(fatVBRAction, &QAction::triggered, this, [this]() { onApplyTags("FAT VBR"); });
+
+
+            QAction *fat32VBRAction = new QAction("FAT32 VBR", this);
+            fatMenu->addAction(fat32VBRAction);
+            connect(fat32VBRAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 VBR"); });
+
+            QAction *fat32FileAllocationAction = new QAction("FAT32 File Allocation Table", this);
+            fatMenu->addAction(fat32FileAllocationAction);
+            connect(fat32FileAllocationAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 FAT"); });
+
+            QAction *fat32SFNDirectoryAction = new QAction("FAT32 SFN Directory Entry", this);
+            fatMenu->addAction(fat32SFNDirectoryAction);
+            connect(fat32SFNDirectoryAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 SFN"); });
+
+
+            QAction *fat32DosAliasLFNAction = new QAction("FAT32 DOS Alias with LFN", this);
+            fatMenu->addAction(fat32DosAliasLFNAction);
+            connect(fat32DosAliasLFNAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 DOS LFN"); });
+
+
+        // NTFS
+        QMenu *ntfsMenu = applyTemplateMenu->addMenu("NTFS");
+
+            QAction *ntfsVBRAction = new QAction("NTFS VBR", this);
+            ntfsMenu->addAction(ntfsVBRAction);
+            connect(ntfsVBRAction, &QAction::triggered, this, [this]() { onApplyTags("NTFS VBR"); });
+
+            QMenu *MFTEntrySubMenu = ntfsMenu->addMenu("$MFT Entry");
+
+                QAction *fileRecordHeaderAction = new QAction("File Record Header", this);
+                MFTEntrySubMenu->addAction(fileRecordHeaderAction);
+                connect(fileRecordHeaderAction, &QAction::triggered, this, [this]() { onApplyTags("File Record Header"); });
+
+                QAction *standardAttributerAction = new QAction("Standard Attribute", this);
+                MFTEntrySubMenu->addAction(standardAttributerAction);
+                connect(standardAttributerAction, &QAction::triggered, this, [this]() { onApplyTags("Standard Attribute"); });
+
+
+                QAction *filenameAttributerAction = new QAction("Filename Attribute", this);
+                MFTEntrySubMenu->addAction(filenameAttributerAction);
+                connect(filenameAttributerAction, &QAction::triggered, this, [this]() { onApplyTags("Filename Attribute"); });
+
+
+                QAction *dataAttributerAction = new QAction("Data Attribute", this);
+                MFTEntrySubMenu->addAction(dataAttributerAction);
+                connect(dataAttributerAction, &QAction::triggered, this, [this]() { onApplyTags("Data Attribute"); });
+
+            QAction *ntfsRunlistEntryAction = new QAction("NTFS Runlist Entry", this);
+            ntfsMenu->addAction(ntfsRunlistEntryAction);
+            connect(ntfsRunlistEntryAction, &QAction::triggered, this, [this]() { onApplyTags("NTFS Runlist Entry"); });
+
+
+        // ExFAT
+        QMenu *exfatMenu = applyTemplateMenu->addMenu("ExFAT");
+
+            QAction *exfatVBRAction = new QAction("ExFAT VBR", this);
+            exfatMenu->addAction(exfatVBRAction);
+            connect(exfatVBRAction, &QAction::triggered, this, [this]() { onApplyTags("exFAT VBR"); });
+
+
+            QAction *exfatAllocationBitmapTableAction = new QAction("ExFAT Allocation Bitmap Table", this);
+            exfatMenu->addAction(exfatAllocationBitmapTableAction);
+            connect(exfatAllocationBitmapTableAction, &QAction::triggered, this, [this]() { onApplyTags("ExFAT Allocation Bitmap Table"); });
+
+
+            QMenu *exfatDirectoryEntryMenu = exfatMenu->addMenu("ExFAT Directory Entry");
+            exfatMenu->addAction(exfatAllocationBitmapTableAction);
+
+                QAction *exfatAllocationBitmapDirectoryEntryAction = new QAction("ExFAT Allocation Bitmap Directory Entry", this);
+                exfatDirectoryEntryMenu->addAction(exfatAllocationBitmapDirectoryEntryAction);
+                connect(exfatAllocationBitmapDirectoryEntryAction, &QAction::triggered, this, [this]() { onApplyTags("ExFAT Allocation Bitmap Directory Entry"); });
+
+
+                QAction *exfatUpcaseTableDirectoryEntryAction = new QAction("ExFAT Upcase Table Directory Entry", this);
+                exfatDirectoryEntryMenu->addAction(exfatUpcaseTableDirectoryEntryAction);
+                connect(exfatUpcaseTableDirectoryEntryAction, &QAction::triggered, this, [this]() { onApplyTags("ExFAT Upcase Table Directory Entry"); });
+
+                QAction *exfatVolumrLabelDirectoryEntryAction = new QAction("ExFAT Volume Label Directory Entry", this);
+                exfatDirectoryEntryMenu->addAction(exfatVolumrLabelDirectoryEntryAction);
+                connect(exfatVolumrLabelDirectoryEntryAction, &QAction::triggered, this, [this]() { onApplyTags("ExFAT Volume Label Directory Entry"); });
+
+
+                QAction *exfatFileDirectoryEntryAction = new QAction("ExFAT File Directory Entry", this);
+                exfatDirectoryEntryMenu->addAction(exfatFileDirectoryEntryAction);
+                connect(exfatFileDirectoryEntryAction, &QAction::triggered, this, [this]() { onApplyTags("ExFAT File Directory Entry"); });
+
+                QAction *exfatStreamExtensionDirectoryEntryAction = new QAction("ExFAT Stream Extension Directory Entry", this);
+                exfatDirectoryEntryMenu->addAction(exfatStreamExtensionDirectoryEntryAction);
+                connect(exfatStreamExtensionDirectoryEntryAction, &QAction::triggered, this, [this]() { onApplyTags("ExFAT Stream Extension Directory Entry"); });
+
+                QAction *exfatFileNameDirectoryEntryAction = new QAction("ExFAT File Name Directory Entry", this);
+                exfatDirectoryEntryMenu->addAction(exfatFileNameDirectoryEntryAction);
+                connect(exfatFileNameDirectoryEntryAction, &QAction::triggered, this, [this]() { onApplyTags("ExFAT File Name Directory Entry"); });
+
+
+
 
     contextMenu.exec(event->globalPos());
+}
+
+void HexEditor::onStartBlock()
+{
+    startBlockOffset = cursorPosition;
+    startBlockSelected = true;
+    qDebug() << "Start block selected at offset:" << startBlockOffset;
+}
+
+void HexEditor::onEndBlock()
+{
+    if (!startBlockSelected) {
+        qDebug() << "Start block not selected.";
+        return;
+    }
+
+    quint64 endBlockOffset = cursorPosition;
+    quint64 length = endBlockOffset - startBlockOffset + 1;
+
+    if (startBlockOffset > endBlockOffset) {
+        std::swap(startBlockOffset, endBlockOffset);
+    }
+
+    NewTagDialog dialog(this);
+    dialog.setStartAddress(startBlockOffset);
+    dialog.setEndAddress(endBlockOffset);
+    QString description = QString("[%1] - [%2]").arg(startBlockOffset).arg(endBlockOffset);
+    dialog.setDescription(description);
+    connect(&dialog, &NewTagDialog::tagSaved, this, &HexEditor::addTag);
+    dialog.exec();
+
+    startBlockSelected = false;
+}
+
+
+void HexEditor::onShowTags(const QString &tagCategory)
+{
+    QList<Tag> tags = tagsHandler->getTagsByCategory(tagCategory);
+
+    if (tags.isEmpty()) {
+        qDebug() << "No tags found for category " << tagCategory;
+        return;
+    }
+
+    TagDialogModel dialog(tagCategory, tags, *device,cursorPosition, this);
+    dialog.exec();
+}
+
+void HexEditor::onApplyTags(QString category)
+{
+
+
+    QList<Tag> tagsFromDB = tagsHandler->getTagsByCategory(category);
+
+    if (tagsFromDB.isEmpty()) {
+        qDebug() << "No tags found for category " << category;
+        return;
+    }
+
+    qDebug()<< "cursorPosition:"<< cursorPosition;
+
+    for (const Tag &tag : tagsFromDB) {
+        addTag(tag.offset+cursorPosition, tag.length, tag.description, QColor(tag.color),"template");
+    }
+
+    viewport()->update(); // Refresh the viewport to apply the new tags
+    qDebug() << category<< " tags applied successfully.";
+}
+
+
+
+
+
+void HexEditor::onTagSelectedBytes()
+{
+    if (selection.first == -1 || selection.second == -1) {
+        // No selection made
+        return;
+    }
+
+    quint64 startAddr = selection.first + visibleStart;
+    quint64 endAddr = selection.second + visibleStart;
+
+    NewTagDialog dialog(this);
+    dialog.setStartAddress(startAddr);
+    dialog.setEndAddress(endAddr);
+    QString description = QString("[%1] - [%2]").arg(startAddr).arg(endAddr);
+    dialog.setDescription(description);
+    connect(&dialog, &NewTagDialog::tagSaved, this, &HexEditor::addTag);
+    dialog.exec();
 }
 
 void HexEditor::onCopy()
@@ -497,4 +851,135 @@ void HexEditor::scrollContentsBy(int dx, int dy)
 {
     QAbstractScrollArea::scrollContentsBy(dx, dy);
     updateVisibleData();
+}
+
+
+void HexEditor::addTag(quint64 offset, quint64 length, const QString &description, const QColor &color, const QString &type)
+{
+
+    //qDebug() << "Adding tags" << type;
+
+    tags.append(Tag{offset, length, description, color.name(),"",type});
+    emit tagsUpdated(tags);
+
+    viewport()->update();
+}
+
+void HexEditor::clearTags(){
+    tags.clear();
+    emit tagsUpdated(tags);
+}
+
+
+void HexEditor::removeTag(quint64 offset, int index)
+{
+
+    //Ignore index
+    auto it = std::remove_if(tags.begin(), tags.end(), [offset](const Tag &tag) {
+        return tag.offset == offset;
+    });
+
+    if (it != tags.end()) {
+        tags.erase(it, tags.end());
+        emit tagsUpdated(tags);
+        viewport()->update();
+    } else {
+        qDebug() << "No tag found at offset" << offset;
+    }
+}
+
+void HexEditor::importTags(const QString &tagType)
+{
+    QString fileName = QFileDialog::getOpenFileName(this, tr("Open Tags"), "", tr("Text Files (*.txt);;All Files (*)"));
+    if (fileName.isEmpty()) return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qDebug() << "Could not open file for reading:" << file.errorString();
+        return;
+    }
+
+    //clearTags(); // Clear existing tags
+
+    QTextStream in(&file);
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        QStringList parts = line.split(",");
+        if (parts.size() != 4) continue;
+
+        bool ok;
+        quint64 offset = parts[0].split(" ").first().toULongLong(&ok);
+        if (!ok) continue;
+        quint64 endOffset = parts[1].split(" ").first().toULongLong(&ok);
+        if (!ok) continue;
+
+        quint64 length = endOffset - offset + 1;
+        QString description = parts[2];
+        QString color = parts[3];
+
+        addTag(offset, length, description, QColor(color), tagType); // Use the tagType parameter
+    }
+
+    file.close();
+    viewport()->update(); // Refresh the viewport to apply the new tags
+}
+
+void HexEditor::exportTags(const QString &type)
+{
+    QString fileName = QFileDialog::getSaveFileName(this, tr("Save Tags"), "", tr("Text Files (*.txt);;All Files (*)"));
+    if (fileName.isEmpty()) return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qDebug() << "Could not open file for writing:" << file.errorString();
+        return;
+    }
+
+    QTextStream out(&file);
+    for (const Tag &tag : tags) {
+        if (tag.type == type) {
+            out << tag.offset << " (0x" << QString::number(tag.offset, 16).toUpper() << "),"
+                << tag.offset + tag.length - 1 << " (0x" << QString::number(tag.offset + tag.length - 1, 16).toUpper() << "),"
+                << tag.description << "," << tag.color << "\n";
+        }
+    }
+
+    file.close();
+}
+
+void HexEditor::exportTagDataByOffset(quint64 offset, const QString &fileName)
+{
+    // Find the tag by offset
+    auto it = std::find_if(tags.begin(), tags.end(), [offset](const Tag &tag) {
+        return tag.offset == offset;
+    });
+
+    if (it == tags.end()) {
+        qDebug() << "Tag not found at offset:" << offset;
+        return;
+    }
+
+    const Tag &tag = *it;
+
+    // Read the data from the file at the specified offset and length
+    QByteArray data;
+    if (device->isOpen()) {
+        device->seek(tag.offset);
+        data = device->read(tag.length);
+    } else {
+        qDebug() << "File is not open.";
+        return;
+    }
+
+    // Export the data to a file
+    QFile outFile(fileName);
+    if (!outFile.open(QIODevice::WriteOnly)) {
+        qDebug() << "Could not open file for writing:" << outFile.errorString();
+        return;
+    }
+
+    outFile.write(data);
+    outFile.close();
+
+    qDebug() << "Exported data for tag at offset:" << offset;
 }
