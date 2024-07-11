@@ -1,0 +1,3 @@
+0 (0x0),0 (0x0),Entry Type,#01ff67
+1 (0x1),1 (0x1),Secondary Flags,#bb1067
+2 (0x2),108 (0x6C),File Name,#017667

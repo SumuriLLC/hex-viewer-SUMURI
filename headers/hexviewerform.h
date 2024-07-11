@@ -26,6 +26,7 @@
 #include "filesystemtablemodel.h"
 #include "tagstablemodel.h"
 
+#include "searchform.h"
 
 namespace Ui {
 class HexViewerForm;
@@ -62,6 +63,10 @@ private slots:
     void onExportSelectedTagData();
     void onExportSelectedTemplateTagData();
 
+    void onOpenSearchForm();
+    void onSearchButtonClicked();
+    void onSearchNextButtonClicked();
+
 private:
 
     Ui::HexViewerForm *ui;
@@ -88,6 +93,9 @@ private:
     void updateTagsTable(const QVector<Tag> &tags);
      void onTagTableDoubleClicked(const QModelIndex &index);
     void onTemplateTagTableDoubleClicked(const QModelIndex &index);
+
+     searchform *searchForm;
+
 
 };
 

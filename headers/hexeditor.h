@@ -39,11 +39,23 @@ public:
     void exportTagDataByOffset(quint64 offset, const QString &fileName);
     void setTagsHandler(TagsHandler *tagsHandler);
 
+    enum class SearchType {
+        Hex,
+        Ascii,
+        Utf16
+    };
+
+    void search(const QString &pattern, SearchType type);
+    void nextSearch();
+
+    void clearSearchResults();
+
+
 
 signals:
     void selectionChanged(const QByteArray &selectedData, quint64 startOffset, quint64 endOffset);
     void tagsUpdated(const QVector<Tag> &tags);
-    void tagNameAndLength(const QString &tagName, quint64 length);
+    void tagNameAndLength(const QString &tagName, quint64 length,QString tagColor);
 
 
 protected:
@@ -63,6 +75,7 @@ private slots:
     void onTagSelectedBytes();
     void onApplyTags(QString category);
     void onShowTags(const QString &tagCategory);
+
 
 private:
     void updateScrollbar();
@@ -96,6 +109,8 @@ private:
     quint64 visibleStart;
     quint64 visibleEnd;
     QSet<quint64> selectedOffsets;
+    QSet<quint64> highligtedOffsets;
+
     quint64 cursorByteOffset;
 
 
@@ -110,6 +125,19 @@ private:
     void onEndBlock();
 
      TagsHandler *tagsHandler;
+
+    QList<QPair<quint64, quint64>> searchResults;
+    int currentSearchIndex;
+    QString currentSearchPattern;
+    SearchType currentSearchType;
+
+    void searchInHex(const QByteArray &pattern);
+    void searchInAscii(const QString &pattern);
+    void searchInUtf16(const QString &pattern);
+    void searchInHexFromPosition(const QByteArray &pattern, quint64 startPosition);
+    void searchInAsciiFromPosition(const QString &pattern, quint64 startPosition);
+    void searchInUtf16FromPosition(const QString &pattern, quint64 startPosition);
+
 
 };
 

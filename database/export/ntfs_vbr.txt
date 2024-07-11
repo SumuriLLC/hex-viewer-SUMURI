@@ -1,0 +1,8 @@
+0 (0x0),2 (0x2),JMP Instruction,#01ff67
+3 (0x3),10 (0xA),OEM ID,#bb1067
+11 (0xB),12 (0xC),Bytes Per Sector,#017667
+13 (0xD),13 (0xD),Sectors Per Cluster,#0bb000
+40 (0x28),47 (0x2F),Total Sectors,#500f67
+48 (0x30),55 (0x37),$MFT Starting Extent,#c07cff
+56 (0x38),63 (0x3F),$MFTMirr Starting Extent,#519f67
+64 (0x40),64 (0x40),Clusters per $MFT,#586600

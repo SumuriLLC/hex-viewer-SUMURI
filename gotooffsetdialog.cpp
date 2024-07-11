@@ -22,22 +22,22 @@ GoToOffsetDialog::~GoToOffsetDialog()
 quint64 GoToOffsetDialog::offset() const
 {
     bool ok;
-    quint64 baseOffset;
+    qint64 baseOffset;
     if (ui->formatComboBox->currentText() == "Hex") {
-        baseOffset = ui->offsetLineEdit->text().toULongLong(&ok, 16);
+        baseOffset = ui->offsetLineEdit->text().toLongLong(&ok, 16);
     } else {
-        baseOffset = ui->offsetLineEdit->text().toULongLong(&ok);
+        baseOffset = ui->offsetLineEdit->text().toLongLong(&ok);
     }
     if (!ok) {
         return 0;
     }
 
-    quint64 multiplier = ui->multiplierComboBox->currentText().toULongLong(&ok);
+    qint64 multiplier = ui->multiplierComboBox->currentText().toLongLong(&ok);
     if (!ok) {
         multiplier = 1;
     }
 
-    quint64 offset = baseOffset * multiplier;
+    qint64 offset = baseOffset * multiplier;
 
     HexEditor *hexEditor = parentWidget()->findChild<HexEditor*>();
     if (hexEditor) {
@@ -48,6 +48,13 @@ quint64 GoToOffsetDialog::offset() const
         }
     }
 
-    qDebug() << "Returned offfset" << offset;
-    return offset;
+    // Ensure the offset is within the valid range
+    if (offset < 0) {
+        offset = 0;
+    } else if (hexEditor && offset >= hexEditor->fileSize) {
+        offset = hexEditor->fileSize - 1;
+    }
+
+    qDebug() << "Returned offset" << offset;
+    return static_cast<quint64>(offset);
 }

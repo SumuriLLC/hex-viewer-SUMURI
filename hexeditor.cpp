@@ -17,6 +17,9 @@
 
 #include <QTextStream>
 #include <QFileDialog>
+#include <windows.h>
+#include "headers/windowsdrivedevice.h"
+
 
 
 HexEditor::HexEditor(QWidget *parent)
@@ -30,9 +33,10 @@ HexEditor::HexEditor(QWidget *parent)
     visibleStart(0),
     visibleEnd(0),
     cursorByteOffset(0),
-    tagsHandler(nullptr),
     startBlockOffset(0),
-    startBlockSelected(false)
+    startBlockSelected(false),
+    tagsHandler(nullptr),
+    currentSearchIndex(-1)
 {
     setFont(QFont("Courier New", 10));
     QFontMetrics fm(font());
@@ -50,6 +54,9 @@ HexEditor::HexEditor(QWidget *parent)
     cursorBlinkTimer.setInterval(500);
     connect(&cursorBlinkTimer, &QTimer::timeout, this, &HexEditor::updateCursorBlink);
     cursorBlinkTimer.start();
+
+
+
 }
 
 void HexEditor::setTagsHandler(TagsHandler *tagsHandler)
@@ -57,12 +64,39 @@ void HexEditor::setTagsHandler(TagsHandler *tagsHandler)
     this->tagsHandler = tagsHandler;
 }
 
+
+
+
 void HexEditor::setData(const QString &filePath)
 {
+
+
+
     QFileInfo fileInfo(filePath);
     delete device; // Clean up any previously used device
 
-    if (fileInfo.suffix().toUpper() == "E01") {
+    // Check if the filePath represents a physical drive
+    if (filePath.startsWith("\\\\.\\PhysicalDrive")) {
+
+        qDebug() << "Opening to  Windows drive device.";
+
+
+        WindowsDriveDevice *driveDevice = new WindowsDriveDevice(filePath, this);
+        if (!driveDevice->open(QIODevice::ReadOnly)) {
+            qDebug() << "Failed to open Windows drive device.";
+            delete driveDevice;
+            device = nullptr;
+            return;
+        }
+        device = driveDevice;
+        fileSize = device->size();
+        qDebug() << "Windows device file size:" << fileSize;
+
+
+
+
+
+    } else if (fileInfo.suffix().toUpper() == "E01") {
         EwfDevice *ewfDevice = new EwfDevice(this);
         if (!ewfDevice->openEwf(filePath.toStdString().c_str(), QIODevice::ReadOnly)) {
             qDebug() << "Failed to open EWF device.";
@@ -71,21 +105,26 @@ void HexEditor::setData(const QString &filePath)
             return;
         }
         device = ewfDevice;
+        fileSize = device->size(); // This should work for EWF files
+        qDebug() << "EWF file size:" << fileSize;
     } else {
         // Handle regular file
         device = new QFile(filePath, this);
+        if (!device->open(QIODevice::ReadOnly)) {
+            qDebug() << "Failed to open file.";
+            delete device;
+            device = nullptr;
+            return;
+        }
+        fileSize = device->size();
+        qDebug() << "Regular file size:" << fileSize;
     }
 
-    if (!device->open(QIODevice::ReadOnly)) {
-        qDebug() << "Failed to open file.";
-        delete device;
-        device = nullptr;
-        return;
+    //File Size is Limited to 32GB due to limits for data structues
+    qint64 maxFileSizeLimit=32212254720 ;
+    if(fileSize >maxFileSizeLimit){
+        fileSize= maxFileSizeLimit;
     }
-
-    fileSize = device->size();
-    qDebug() << "Getting file size." << fileSize;
-
 
     m_data.clear();
 
@@ -121,6 +160,7 @@ void HexEditor::paintEvent(QPaintEvent *event)
     drawHexArea(painter, firstLine, horizontalOffset);
     drawAsciiArea(painter, firstLine, horizontalOffset);
     drawCursor(painter);
+
 
 }
 
@@ -166,15 +206,30 @@ void HexEditor::mouseReleaseEvent(QMouseEvent *event)
 
 void HexEditor::updateScrollbar()
 {
+    // Calculate total lines
+    quint64 lines = (fileSize + bytesPerLine - 1) / bytesPerLine;
 
-        quint64 lines = (fileSize + bytesPerLine - 1) / bytesPerLine;
-        verticalScrollBar()->setRange(0, lines - 1); //1 Line adjustment
-        verticalScrollBar()->setPageStep((viewport()->height() - headerHeight) / charHeight);
+    //qDebug() << "Total lines:" << lines << "File size:" << fileSize << "Bytes per line:" << bytesPerLine;
 
-        int contentWidth = addressAreaWidth + hexAreaWidth + asciiAreaWidth;
-        horizontalScrollBar()->setRange(0, qMax(0, contentWidth - viewport()->width()));
-        horizontalScrollBar()->setPageStep(viewport()->width() / charWidth);
+    //Max scrollbar value that can be set
+    if(lines >2147483647){
+        lines=2147483647;
+    }
+    // Set vertical scrollbar range and page step
+    verticalScrollBar()->setRange(0, lines-1 );
+    verticalScrollBar()->setPageStep((viewport()->height() - headerHeight) / charHeight);
+
+    // Calculate content width
+    int contentWidth = addressAreaWidth + hexAreaWidth + asciiAreaWidth;
+
+    // Set horizontal scrollbar range and page step
+    horizontalScrollBar()->setRange(0, qMax(0, contentWidth - viewport()->width()));
+    horizontalScrollBar()->setPageStep(viewport()->width() / charWidth);
+
+   // qDebug() << "Vertical Scrollbar range:" << verticalScrollBar()->minimum() << "-" << verticalScrollBar()->maximum();
+   // qDebug() << "Horizontal Scrollbar range:" << horizontalScrollBar()->minimum() << "-" << horizontalScrollBar()->maximum();
 }
+
 
 void HexEditor::updateVisibleData()
 {
@@ -184,6 +239,8 @@ void HexEditor::updateVisibleData()
 
     visibleStart = firstLine * bytesPerLine;
     visibleEnd = qMin(fileSize, visibleStart + linesVisible * bytesPerLine);
+
+
 
     device->seek(visibleStart);
     data_visible = device->read(visibleEnd - visibleStart);
@@ -222,16 +279,18 @@ void HexEditor::updateSelection(const QPoint &pos, bool reset)
 
     QString tagName = "";
     quint64 tagLength = 0;
+    QString tagColor="";
 
     for (const Tag &tag : tags) {
         if (cursorPosition >= tag.offset && cursorPosition < tag.offset + tag.length) {
             tagName = tag.description;
             tagLength = tag.length;
+            tagColor=tag.color;
             break;
         }
     }
 
-    emit tagNameAndLength(tagName, tagLength);
+    emit tagNameAndLength(tagName, tagLength,tagColor);
     viewport()->update();
 }
 
@@ -272,30 +331,44 @@ void HexEditor::setSelectedBytes(const QByteArray &selectedBytes)
 
 void HexEditor::setSelectedByte(qint64 offset)
 {
-
     quint64 unsignedOffset = static_cast<quint64>(offset);
+   // qDebug() << "Setting selected byte at offset:" << offset << " (unsigned:" << unsignedOffset << ")";
+   // qDebug() << "File size:" << fileSize;
 
-    if (unsignedOffset >= 0 && unsignedOffset < fileSize) {
+    if (unsignedOffset < fileSize) {
+       // qDebug() << "Offset is within the file size range.";
         if (unsignedOffset < visibleStart || unsignedOffset >= visibleEnd) {
+          //  qDebug() << "Offset is outside the current visible range. Updating vertical scroll value.";
             verticalScrollBar()->setValue(unsignedOffset / bytesPerLine);
             updateVisibleData();
+        } else {
+          //  qDebug() << "Offset is within the current visible range.";
         }
+
         selection.first = unsignedOffset - visibleStart;
         selection.second = selection.first;
         selectedOffsets.clear();
         selectedOffsets.insert(offset);
+
+      //  qDebug() << "Selection updated. First:" << selection.first << "Second:" << selection.second;
     } else {
+       // qDebug() << "Offset is out of the file size range. Clearing selection.";
         selection.first = -1;
         selection.second = -1;
         selectedOffsets.clear();
     }
 
-    cursorPosition =selection.first + visibleStart; //Update cursor too
-    cursorByteOffset=cursorPosition;
+    cursorPosition = selection.first + visibleStart;
+    cursorByteOffset = cursorPosition;
+
+    //qDebug() << "Cursor position updated:" << cursorPosition;
 
     viewport()->update();
-    emit selectionChanged(data_visible, selection.first + visibleStart, selection.second + visibleStart);  // Emit the signal
+    emit selectionChanged(data_visible, selection.first + visibleStart, selection.second + visibleStart);
+
+    //qDebug() << "Emitted selectionChanged signal.";
 }
+
 
 quint64 HexEditor::calculateOffset(const QPoint &pos)
 {
@@ -343,17 +416,7 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
     int linesVisible = (viewport()->height() - headerHeight) / charHeight;
     quint64 endLine = startLine + linesVisible;
 
-    int totalHeight = headerHeight + (linesVisible + 1) * charHeight; // Ensure total height includes all visible lines
 
-    // Draw vertical lines after every 8 columns
-    for (quint64 i = 8; i < bytesPerLine; i += 8) {
-        quint64 x = addressAreaWidth + i * 3 * charWidth - horizontalOffset;
-        painter.drawLine(x, headerHeight, x, totalHeight);
-    }
-
-    // Draw vertical line between hex and ASCII areas
-    quint64 separatorX = addressAreaWidth + hexAreaWidth - horizontalOffset;
-    painter.drawLine(separatorX, headerHeight, separatorX, totalHeight);
 
     for (quint64 line = startLine; line <= endLine; ++line) {
         if (line * bytesPerLine >= fileSize) break;
@@ -366,6 +429,11 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
 
             // Check if the position is within the selected offsets first
             bool isSelected = selectedOffsets.contains(pos);
+            bool isHighlighted = highligtedOffsets.contains(pos);
+
+            if (isHighlighted) {
+                backgroundColor = Qt::yellow;
+            }
 
             if (isSelected) {
                 backgroundColor = Qt::darkBlue;
@@ -395,7 +463,25 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
             QString hex = QString("%1").arg((unsigned char)data_visible[pos - visibleStart], 2, 16, QChar('0')).toUpper();
             painter.drawText(addressAreaWidth + byte * 3 * charWidth - horizontalOffset, headerHeight + (line - startLine + 1) * charHeight, hex);
         }
+
+
+        int totalHeight = headerHeight + (linesVisible + 1) * charHeight; // Ensure total height includes all visible lines
+
+        // Draw vertical lines after every 8 columns
+        for (quint64 i = 8; i < bytesPerLine; i += 8) {
+            int x = addressAreaWidth + i * 3 * charWidth - horizontalOffset;
+            //qDebug() << "Drawing vertical line... i:" << i << "x:" << x << "headerHeight:" << headerHeight << "totalHeight:" << totalHeight;
+            painter.drawLine(x, headerHeight, x, totalHeight);
+        }
+
+        // Draw vertical line between hex and ASCII areas
+        int separatorX = addressAreaWidth + hexAreaWidth - horizontalOffset-1;
+        //qDebug() << "Drawing separator line... separatorX:" << separatorX << "headerHeight:" << headerHeight << "totalHeight:" << totalHeight;
+        painter.setPen(Qt::gray);  // Set pen color for separator
+        painter.drawLine(separatorX, headerHeight, separatorX, totalHeight);
     }
+
+
 }
 
 void HexEditor::drawAsciiArea(QPainter &painter, quint64 startLine, int horizontalOffset)
@@ -412,6 +498,11 @@ void HexEditor::drawAsciiArea(QPainter &painter, quint64 startLine, int horizont
 
             // Check if the position is within the selected offsets first
             bool isSelected = selectedOffsets.contains(pos);
+            bool isHighlighted=highligtedOffsets.contains(pos);
+
+            if (isHighlighted) {
+                backgroundColor = Qt::yellow;
+            }
 
             if (isSelected) {
                 backgroundColor = Qt::darkBlue;
@@ -463,7 +554,7 @@ void HexEditor::drawHeader(QPainter &painter, int horizontalOffset)
     }
 
     // Draw vertical line between hex and ASCII areas
-    quint64 separatorX = addressAreaWidth + hexAreaWidth - horizontalOffset;
+    quint64 separatorX = addressAreaWidth + hexAreaWidth - horizontalOffset-1;
     painter.drawLine(separatorX, 0, separatorX, headerHeight);
 }
 
@@ -566,9 +657,27 @@ void HexEditor::contextMenuEvent(QContextMenuEvent *event)
             connect(templateMbrAction, &QAction::triggered, this, [this]() { onApplyTags("MBR"); });
 
 
-            QAction *templateGptAction = new QAction("GPT", this);
-            templateDiskStructuresMenu->addAction(templateGptAction);
-            connect(templateGptAction, &QAction::triggered, this, [this]() { onApplyTags("GPT"); });
+            QAction *templateMptAction = new QAction("MPT", this);
+            templateDiskStructuresMenu->addAction(templateMptAction);
+            connect(templateMptAction, &QAction::triggered, this, [this]() { onApplyTags("MPT"); });
+
+
+
+            QMenu *gptMenu = templateDiskStructuresMenu->addMenu("GPT");
+
+                QAction *protectiveMbrAction = new QAction("Protective MBR", this);
+                gptMenu->addAction(protectiveMbrAction);
+                connect(protectiveMbrAction, &QAction::triggered, this, [this]() { onApplyTags("Protective MBR"); });
+
+                QAction *gptHeaderAction = new QAction("GPT Header", this);
+                gptMenu->addAction(gptHeaderAction);
+                connect(gptHeaderAction, &QAction::triggered, this, [this]() { onApplyTags("GPT Header"); });
+
+
+                QAction *gptEntryAction = new QAction("GPT Entry", this);
+                gptMenu->addAction(gptEntryAction);
+                connect(gptEntryAction, &QAction::triggered, this, [this]() { onApplyTags("GPT Entry"); });
+
 
 
         // FAT
@@ -585,16 +694,16 @@ void HexEditor::contextMenuEvent(QContextMenuEvent *event)
 
             QAction *fat32FileAllocationAction = new QAction("FAT32 File Allocation Table", this);
             fatMenu->addAction(fat32FileAllocationAction);
-            connect(fat32FileAllocationAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 FAT"); });
+            connect(fat32FileAllocationAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 File Allocation Table"); });
 
             QAction *fat32SFNDirectoryAction = new QAction("FAT32 SFN Directory Entry", this);
             fatMenu->addAction(fat32SFNDirectoryAction);
-            connect(fat32SFNDirectoryAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 SFN"); });
+            connect(fat32SFNDirectoryAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 SFN Directory Entry"); });
 
 
             QAction *fat32DosAliasLFNAction = new QAction("FAT32 DOS Alias with LFN", this);
             fatMenu->addAction(fat32DosAliasLFNAction);
-            connect(fat32DosAliasLFNAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 DOS LFN"); });
+            connect(fat32DosAliasLFNAction, &QAction::triggered, this, [this]() { onApplyTags("FAT32 DOS Alias with LFN"); });
 
 
         // NTFS
@@ -692,7 +801,7 @@ void HexEditor::onEndBlock()
     }
 
     quint64 endBlockOffset = cursorPosition;
-    quint64 length = endBlockOffset - startBlockOffset + 1;
+   // quint64 length = endBlockOffset - startBlockOffset + 1;
 
     if (startBlockOffset > endBlockOffset) {
         std::swap(startBlockOffset, endBlockOffset);
@@ -734,14 +843,14 @@ void HexEditor::onApplyTags(QString category)
         return;
     }
 
-    qDebug()<< "cursorPosition:"<< cursorPosition;
+   // qDebug()<< "cursorPosition:"<< cursorPosition;
 
     for (const Tag &tag : tagsFromDB) {
         addTag(tag.offset+cursorPosition, tag.length, tag.description, QColor(tag.color),"template");
     }
 
     viewport()->update(); // Refresh the viewport to apply the new tags
-    qDebug() << category<< " tags applied successfully.";
+    //qDebug() << category<< " tags applied successfully.";
 }
 
 
@@ -981,5 +1090,272 @@ void HexEditor::exportTagDataByOffset(quint64 offset, const QString &fileName)
     outFile.write(data);
     outFile.close();
 
-    qDebug() << "Exported data for tag at offset:" << offset;
+   // qDebug() << "Exported data for tag at offset:" << offset;
 }
+
+
+
+void HexEditor::search(const QString &pattern, SearchType type)
+{
+    currentSearchPattern = pattern;
+    currentSearchType = type;
+
+    switch (type) {
+    case SearchType::Hex:
+        searchInHex(QByteArray::fromHex(pattern.toUtf8()));
+        break;
+    case SearchType::Ascii:
+        searchInAscii(pattern);
+        break;
+    case SearchType::Utf16:
+        searchInUtf16(pattern);
+        break;
+    }
+}
+
+
+void HexEditor::searchInHex(const QByteArray &pattern)
+{
+    searchResults.clear();
+    int patternSize = pattern.size();
+    for (quint64 i = 0; i <= fileSize - patternSize; ++i) {
+        device->seek(i);
+        QByteArray chunk = device->read(patternSize);
+        if (chunk == pattern) {
+            searchResults.append(qMakePair(i, i + patternSize - 1));
+            break;
+        }
+    }
+    currentSearchIndex = 0;
+    if (!searchResults.isEmpty()) {
+
+
+        highligtedOffsets.clear();
+        quint64 searchStart = searchResults.first().first;
+
+       // qDebug() << "pattern Size searchInHex : " << pattern.size();
+
+        for (int i = 0; i < pattern.size(); ++i) {
+            highligtedOffsets.insert(searchStart + i);
+        }
+
+        setSelectedByte(searchResults.first().first);
+    }
+    viewport()->update();
+}
+
+void HexEditor::searchInAscii(const QString &pattern)
+{
+
+    //qDebug() << "searching....." << pattern;
+    searchResults.clear();
+    QByteArray patternBytes = pattern.toUtf8();
+    int patternSize = patternBytes.size();
+    for (quint64 i = 0; i <= fileSize - patternSize; ++i) {
+        device->seek(i);
+        QByteArray chunk = device->read(patternSize);
+        if (chunk == patternBytes) {
+            searchResults.append(qMakePair(i, i + patternSize - 1));
+            break;
+        }
+    }
+
+   // qDebug() << "searchResults....." << searchResults;
+
+    currentSearchIndex = 0;
+    if (!searchResults.isEmpty()) {
+
+
+        highligtedOffsets.clear();
+        quint64 searchStart = searchResults.first().first;
+        QByteArray patternBytes = currentSearchPattern.toUtf8();
+        for (int i = 0; i < patternBytes.size(); ++i) {
+            highligtedOffsets.insert(searchStart + i);
+        }
+        setSelectedByte(searchResults.first().first);
+    }
+    viewport()->update();
+}
+
+void HexEditor::searchInUtf16(const QString &pattern)
+{
+    searchResults.clear();
+    const char16_t *patternUtf16 = reinterpret_cast<const char16_t *>(pattern.utf16());
+    QByteArray patternBytes(reinterpret_cast<const char *>(patternUtf16), pattern.size() * 2);
+    int patternSize = patternBytes.size();
+    for (quint64 i = 0; i <= fileSize - patternSize; ++i) {
+        device->seek(i);
+        QByteArray chunk = device->read(patternSize);
+        if (chunk == patternBytes) {
+            searchResults.append(qMakePair(i, i + patternSize - 1));
+            break;
+        }
+    }
+    currentSearchIndex = 0;
+    if (!searchResults.isEmpty()) {
+
+        highligtedOffsets.clear();
+        quint64 searchStart = searchResults.first().first;
+        for (int i = 0; i < patternSize; ++i) {
+            highligtedOffsets.insert(searchStart + i);
+        }
+        setSelectedByte(searchResults.first().first);
+    }
+    viewport()->update();
+}
+
+
+void HexEditor::nextSearch()
+{
+    if (searchResults.isEmpty()) return;
+
+    quint64 startPosition = searchResults.last().second + 1;
+    searchResults.clear();
+
+    switch (currentSearchType) {
+    case SearchType::Hex:
+       searchInHexFromPosition(QByteArray::fromHex(currentSearchPattern.toUtf8()), startPosition);
+        break;
+    case SearchType::Ascii:
+        searchInAsciiFromPosition(currentSearchPattern, startPosition);
+        break;
+    case SearchType::Utf16:
+        searchInUtf16FromPosition(currentSearchPattern, startPosition);
+        break;
+    }
+
+    if (!searchResults.isEmpty()) {
+        currentSearchIndex = 0;
+
+        highligtedOffsets.clear();
+        quint64 searchStart = searchResults.first().first;
+
+
+        if(currentSearchType==SearchType::Hex){
+           // qDebug() << "pattern Size : " << QByteArray::fromHex(currentSearchPattern.toUtf8()).size();
+
+            for (int i = 0; i < QByteArray::fromHex(currentSearchPattern.toUtf8()).size(); ++i) {
+                highligtedOffsets.insert(searchStart + i);
+            }
+        }else if(currentSearchType==SearchType::Utf16){
+
+
+            const char16_t *patternUtf16 = reinterpret_cast<const char16_t *>(currentSearchPattern.utf16());
+            QByteArray patternBytes(reinterpret_cast<const char *>(patternUtf16), currentSearchPattern.size() * 2);
+
+           // qDebug() << "patternBytes Hex : " << patternBytes;
+            for (int i = 0; i < patternBytes.size(); ++i) {
+                highligtedOffsets.insert(searchStart + i);
+            }
+
+        }
+
+        else{
+
+            QByteArray patternBytes = currentSearchPattern.toUtf8();
+           // qDebug() << "patternBytes : " << patternBytes;
+            for (int i = 0; i < patternBytes.size(); ++i) {
+                highligtedOffsets.insert(searchStart + i);
+            }
+
+
+        }
+
+        setSelectedByte(searchResults.first().first);
+    }
+    viewport()->update();
+}
+
+
+void HexEditor::searchInHexFromPosition(const QByteArray &pattern, quint64 startPosition)
+{
+    int patternSize = pattern.size();
+    const int chunkSize = 4096;
+    QByteArray buffer;
+    device->seek(startPosition);
+
+    while (!device->atEnd()) {
+        buffer.append(device->read(chunkSize));
+
+        // Search for the pattern in the buffer
+        for (int i = 0; i <= buffer.size() - patternSize; ++i) {
+            if (buffer.mid(i, patternSize) == pattern) {
+                searchResults.append(qMakePair(startPosition + i, startPosition + i + patternSize - 1));
+                return;
+            }
+        }
+
+        // Retain the last part of the buffer that might contain the start of the pattern
+        buffer = buffer.right(patternSize - 1);
+        startPosition += chunkSize;
+    }
+}
+
+void HexEditor::searchInAsciiFromPosition(const QString &pattern, quint64 startPosition)
+{
+    //qDebug() << "next searching " << pattern << "from pos" << startPosition;
+    QByteArray patternBytes = pattern.toUtf8();
+    int patternSize = patternBytes.size();
+    const int chunkSize = 4096;
+    QByteArray buffer;
+    device->seek(startPosition);
+
+    while (!device->atEnd()) {
+        buffer.append(device->read(chunkSize));
+
+        // Search for the pattern in the buffer
+        for (int i = 0; i <= buffer.size() - patternSize; ++i) {
+            if (buffer.mid(i, patternSize) == patternBytes) {
+                searchResults.append(qMakePair(startPosition + i, startPosition + i + patternSize - 1));
+               // qDebug() << "searchResults " << searchResults;
+                return;
+            }
+        }
+
+        // Retain the last part of the buffer that might contain the start of the pattern
+        buffer = buffer.right(patternSize - 1);
+        startPosition += chunkSize;
+    }
+
+   // qDebug() << "searchResults " << searchResults;
+}
+
+void HexEditor::searchInUtf16FromPosition(const QString &pattern, quint64 startPosition)
+{
+    const char16_t *patternUtf16 = reinterpret_cast<const char16_t *>(pattern.utf16());
+    QByteArray patternBytes(reinterpret_cast<const char *>(patternUtf16), pattern.size() * 2);
+    int patternSize = patternBytes.size();
+    const int chunkSize = 4096;
+    QByteArray buffer;
+    device->seek(startPosition);
+
+    while (!device->atEnd()) {
+        buffer.append(device->read(chunkSize));
+
+        // Search for the pattern in the buffer
+        for (int i = 0; i <= buffer.size() - patternSize; ++i) {
+            if (buffer.mid(i, patternSize) == patternBytes) {
+                searchResults.append(qMakePair(startPosition + i, startPosition + i + patternSize - 1));
+                return;
+            }
+        }
+
+        // Retain the last part of the buffer that might contain the start of the pattern
+        buffer = buffer.right(patternSize - 1);
+        startPosition += chunkSize;
+    }
+}
+
+
+
+void  HexEditor::clearSearchResults(){
+
+   // qDebug() << "clear searchResults " ;
+
+    highligtedOffsets.clear();
+    searchResults.clear();
+    viewport()->update();
+
+}
+
+

@@ -1,0 +1,6 @@
+0 (0x0),0 (0x0),Boot Indicator,#ffff00
+1 (0x1),3 (0x3),Start CHS Value,#017667
+4 (0x4),4 (0x4),Partition Type,#0000ff
+5 (0x5),7 (0x7),End CHS Value,#00ffff
+8 (0x8),11 (0xB),Start Sector,#ff00ff
+12 (0xC),15 (0xF),Total Sectors,#00ff00

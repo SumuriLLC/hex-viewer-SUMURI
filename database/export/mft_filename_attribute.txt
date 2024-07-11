@@ -1,0 +1,12 @@
+0 (0x0),3 (0x3),Filename Attribute Identifier,#01ff67
+4 (0x4),7 (0x7),Filename Attribute Length,#bb1067
+8 (0x8),8 (0x8),Filename Content Flag,#017667
+9 (0x9),9 (0x9),Filename Length of stream name,#0bb000
+10 (0xA),11 (0xB),Filename Offset to the stream name,#c07cff
+16 (0x10),19 (0x13),Filename Size of content,#0070ff
+20 (0x14),21 (0x15),Filename Offset to the content,#510667
+-3076 (0xFFFFFFFFFFFFF3FC),-3071 (0xFFFFFFFFFFFFF401),Filename Parent MFT Record Number,#aa09f7
+-3070 (0xFFFFFFFFFFFFF402),-3069 (0xFFFFFFFFFFFFF403),Filename Parent Directory Sequence Number,#22a399
+-3012 (0xFFFFFFFFFFFFF43C),-3012 (0xFFFFFFFFFFFFF43C),Filename Length,#111111
+-3011 (0xFFFFFFFFFFFFF43D),-3011 (0xFFFFFFFFFFFFF43D),Filename Type,#ffcc77
+-3010 (0xFFFFFFFFFFFFF43E),-3011 (0xFFFFFFFFFFFFF43D),Filename,#22bb67

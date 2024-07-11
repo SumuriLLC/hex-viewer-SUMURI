@@ -71,7 +71,7 @@
     </rect>
    </property>
   </widget>
-  <widget class="QLineEdit" name="lineEdit">
+  <widget class="QLineEdit" name="caseNamelineEdit">
    <property name="geometry">
     <rect>
      <x>130</x>
@@ -173,7 +173,7 @@
      <height>25</height>
     </size>
    </property>
-   <widget class="QRadioButton" name="radioButton">
+   <widget class="QRadioButton" name="radioButtonPhysicalDrive">
     <property name="geometry">
      <rect>
       <x>183</x>
@@ -186,7 +186,7 @@
      <string>Physical Drive</string>
     </property>
    </widget>
-   <widget class="QRadioButton" name="radioButton_2">
+   <widget class="QRadioButton" name="radioButtonForensicImage">
     <property name="geometry">
      <rect>
       <x>12</x>
@@ -231,7 +231,7 @@
      <height>39</height>
     </size>
    </property>
-   <widget class="QLineEdit" name="lineEdit_3">
+   <widget class="QLineEdit" name="outputDirectorylineEdit">
     <property name="geometry">
      <rect>
       <x>10</x>

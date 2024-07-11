@@ -7,6 +7,7 @@
 
 //#include "headers/filesystemtabwidget.h"
 #include "headers/filesystemexception.h"
+#include "headers/hexeditor.h"
 
 #include <QMenu>
 #include <QAction>
@@ -25,6 +26,8 @@ HexViewerForm::HexViewerForm(QWidget *parent)
     ,loadingDialog(new LoadingDialog(this))
     , tagsTableModel(new TagsTableModel(this))
     ,templateTagsTableModel(new TagsTableModel(this))
+    ,searchForm(new searchform(this))
+
 
 
 {
@@ -86,9 +89,60 @@ HexViewerForm::HexViewerForm(QWidget *parent)
     connect(ui->exportTagDataButton, &QPushButton::clicked, this, &HexViewerForm::onExportSelectedTagData);
     connect(ui->exportTemplateTagDataButton, &QPushButton::clicked, this, &HexViewerForm::onExportSelectedTemplateTagData);
 
+    connect(ui->searchNextButton, &QPushButton::clicked, this, &HexViewerForm::onSearchNextButtonClicked);
+
+    connect(searchForm->getSearchButton(), &QPushButton::clicked, this, &HexViewerForm::onSearchButtonClicked);
+
+    connect(ui->searchButton, &QPushButton::clicked, this, &HexViewerForm::onOpenSearchForm);
 
 
 }
+
+void HexViewerForm::onOpenSearchForm()
+{
+    ui->hexEditorWidget->clearSearchResults();
+
+    searchForm->show();
+}
+
+void HexViewerForm::onSearchButtonClicked()
+{
+    QString searchPattern = searchForm->getSearchPattern();
+    QString searchTypeStr = searchForm->getSearchType();
+
+    HexEditor::SearchType searchType;
+    if (searchTypeStr == "HEX") {
+        searchType = HexEditor::SearchType::Hex;
+    } else if (searchTypeStr == "ASCII") {
+        searchType = HexEditor::SearchType::Ascii;
+    } else if (searchTypeStr == "UTF-16") {
+        searchType = HexEditor::SearchType::Utf16;
+    } else {
+        // Default to Ascii if type is unrecognized
+        searchType = HexEditor::SearchType::Ascii;
+    }
+
+    loadingDialog->setMessage("Loading , please wait...");
+    loadingDialog->show();
+    qApp->processEvents();
+
+    ui->hexEditorWidget->search(searchPattern, searchType);
+
+    searchForm->hide();
+    loadingDialog->hide();
+}
+
+void HexViewerForm::onSearchNextButtonClicked()
+{
+    loadingDialog->setMessage("Loading , please wait...");
+    loadingDialog->show();
+    qApp->processEvents();
+
+    ui->hexEditorWidget->nextSearch();
+    loadingDialog->hide();
+
+}
+
 
 void HexViewerForm::updateTagsTable(const QVector<Tag> &tags)
 {
@@ -127,12 +181,25 @@ void HexViewerForm::onTemplateTagTableDoubleClicked(const QModelIndex &index)
 
 void HexViewerForm::removeSelectedTemplateTag()
 {
-    QModelIndex selectedIndex = ui->TemplateTagstableView->currentIndex();
-    if (!selectedIndex.isValid()) return;
+    QItemSelectionModel *selectionModel = ui->TemplateTagstableView->selectionModel();
+    QModelIndexList selectedIndexes = selectionModel->selectedRows();
 
-    quint64 offset = ui->TemplateTagstableView->model()->data(ui->TemplateTagstableView->model()->index(selectedIndex.row(), 0)).toULongLong();
-    ui->hexEditorWidget->removeTag(offset, selectedIndex.row());
+    if (selectedIndexes.isEmpty()) return;
+
+    // Sort the selected indexes in descending order
+    std::sort(selectedIndexes.begin(), selectedIndexes.end(), [](const QModelIndex &a, const QModelIndex &b) {
+        return a.row() > b.row();
+    });
+
+    for (const QModelIndex &selectedIndex : selectedIndexes) {
+        if (!selectedIndex.isValid()) continue;
+
+        quint64 offset = ui->TemplateTagstableView->model()->data(ui->TemplateTagstableView->model()->index(selectedIndex.row(), 0)).toULongLong();
+        ui->hexEditorWidget->removeTag(offset, selectedIndex.row());
+    }
 }
+
+
 
 void HexViewerForm::removeSelectedTag()
 {

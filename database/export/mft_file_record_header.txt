@@ -1,0 +1,11 @@
+0 (0x0),3 (0x3),Signature,#ffcc77
+4 (0x4),5 (0x5),Offset to fix up array,#111111
+6 (0x6),7 (0x7),Entried in fix up array,#22a399
+8 (0x8),15 (0xF),$LogFile Sequence Number,#aa09f7
+16 (0x10),17 (0x11),Sequence Count,#510667
+18 (0x12),19 (0x13),Hard Link Count,#0070ff
+20 (0x14),21 (0x15),Offset to first attribute,#c07cff
+22 (0x16),23 (0x17),Allocation Status,#0bb000
+24 (0x18),27 (0x1B),Logical size of $MFT Record,#017667
+28 (0x1C),31 (0x1F),Physical size of $MFT Record,#bb1067
+44 (0x2C),47 (0x2F),$MFT Record Number,#22dd67

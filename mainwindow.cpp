@@ -1,6 +1,7 @@
 #include "headers/mainwindow.h"
 #include "ui_mainwindow.h"
-
+#include <QInputDialog>
+#include "headers/physicaldrivesdialog.h"
 
 
 
@@ -34,6 +35,10 @@ MainWindow::MainWindow(QWidget *parent)
     dataTypeViewModel->setEndian(false); //Default is little endian
 
 
+    connect(ui->openDiskButton, &QPushButton::clicked, this, &MainWindow::on_openDiskButton_clicked);
+
+
+
 }
 
 MainWindow::~MainWindow()
@@ -49,6 +54,17 @@ void MainWindow::openFile()
     }
 }
 
+void MainWindow::on_openDiskButton_clicked()
+{
+    PhysicalDrivesDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        QString selectedDrive = dialog.selectedDrive();
+        if (!selectedDrive.isEmpty()) {
+           // QMessageBox::information(this, tr("Selected Drive"), tr("You selected: %1").arg(selectedDrive));
+              createNewTab(selectedDrive);
+        }
+    }
+}
 //A new instance
 void MainWindow::createNewTab(const QString &fileName)
 {
@@ -110,17 +126,41 @@ void MainWindow::onSelectionChanged(const QByteArray &selectedData, quint64 star
                                  .arg(endOffset)
                                  .arg(QString::number(endOffset, 16).toUpper());
     ui->labelCursorPosition->setText(cursorPosition);
+
+
+
+    QString sector= QString("Sector: %1 ")
+                         .arg(round(startOffset/512)+1);
+
+
+    ui->labelSector->setText(sector);
 }
 
-void MainWindow::onTagNameAndLength(const QString &tagName, quint64 length)
+void MainWindow::onTagNameAndLength(const QString &tagName, quint64 length, QString tagColor)
 {
+    // Calculate the brightness of the color
+    QColor color(tagColor);
+    int brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000;
+
+    QString style;
+    if (brightness > 128) {
+        // Light color, use grey background
+        style = QString("background-color: black; color: %1;").arg(tagColor);
+    } else {
+        // Dark color, no background needed
+        style = QString("color: %1;").arg(tagColor);
+    }
+
     QString tagInfo;
     if (tagName.isEmpty()) {
         tagInfo = "Tag:";
     } else {
-        tagInfo = QString("Tag: %1 (Length: %2)").arg(tagName).arg(length);
+        tagInfo = QString("Tag: <span style='%1'>%2 (Length: %3)</span>").arg(style).arg(tagName).arg(length);
     }
     ui->labelTagName->setText(tagInfo);
+
 }
+
+
 
 

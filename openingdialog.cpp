@@ -3,6 +3,7 @@
 #include <QFileDialog>
 
 #include "headers/mainwindow.h"
+#include "headers/physicaldrivesdialog.h"
 
 
 OpeningDialog::OpeningDialog(QWidget *parent)
@@ -11,6 +12,9 @@ OpeningDialog::OpeningDialog(QWidget *parent)
     ,loadingDialog(new LoadingDialog(this))
 {
     ui->setupUi(this);
+
+    ui->radioButtonForensicImage->setChecked(true); // Default selection
+
 
     connect(ui->selectSourceButton, &QPushButton::clicked, this, &OpeningDialog::onSelectSourceClicked);
     connect(ui->buttonBox, &QDialogButtonBox::clicked, this, &OpeningDialog::onDialogButtonClicked);
@@ -21,9 +25,19 @@ OpeningDialog::OpeningDialog(QWidget *parent)
 
 void OpeningDialog::onSelectSourceClicked()
 {
-    QString filePath = QFileDialog::getOpenFileName(this, tr("Open File"), "", tr("All Files (*)"));
-    if (!filePath.isEmpty()) {
-        ui->selectSourcelineEdit->setText(filePath);
+    if (ui->radioButtonPhysicalDrive->isChecked()) {
+        PhysicalDrivesDialog dialog(this);
+        if (dialog.exec() == QDialog::Accepted) {
+            QString selectedDrive = dialog.selectedDrive();
+            if (!selectedDrive.isEmpty()) {
+                ui->selectSourcelineEdit->setText(selectedDrive);
+            }
+        }
+    } else {
+        QString filePath = QFileDialog::getOpenFileName(this, tr("Open File"), "", tr("All Files (*)"));
+        if (!filePath.isEmpty()) {
+            ui->selectSourcelineEdit->setText(filePath);
+        }
     }
 }
 

@@ -1,0 +1,6 @@
+0 (0x0),15 (0xF),Partition Type GUID,#ffff00
+16 (0x10),31 (0x1F),Unique Partition GUID,#519f67
+32 (0x20),39 (0x27),First LBA,#0000ff
+40 (0x28),47 (0x2F),Last LBA,#bb1067
+48 (0x30),55 (0x37),Attribute Flags,#79b6b6
+56 (0x38),127 (0x7F),Partition Name,#aca1d8

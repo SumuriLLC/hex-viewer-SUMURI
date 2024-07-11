@@ -1,0 +1,21 @@
+0 (0x0),2 (0x2),Jump Boot,#696955
+3 (0x3),10 (0xA),File System Name,#df2244
+11 (0xB),45 (0x2D),Must Be Zero,#018697
+64 (0x40),71 (0x47),Partition Offset,#0bb000
+72 (0x48),79 (0x4F),Volume Length,#c07cff
+80 (0x50),83 (0x53),FAT Offset,#0070ff
+84 (0x54),87 (0x57),FAT Length,#510667
+88 (0x58),91 (0x5B),Cluster Heap Offset,#008aca
+92 (0x5C),95 (0x5F),Cluster count,#22a399
+96 (0x60),99 (0x63),First Cluster Of Root Count,#111111
+100 (0x64),103 (0x67),Volume Serial Number,#ffcc77
+104 (0x68),105 (0x69),File System Revision,#c0c000
+106 (0x6A),107 (0x6B),Volume Flags,#f0cfff
+108 (0x6C),108 (0x6C),Bytes Per Sector Shift,#510667
+109 (0x6D),109 (0x6D),Sectors Per Cluster Shift,#79b6b6
+110 (0x6E),110 (0x6E),Number Of FATs,#aca1d8
+111 (0x6F),111 (0x6F),Drive Select,#aa09f7
+112 (0x70),112 (0x70),Percent In Use,#22a399
+120 (0x78),305 (0x131),Boot Code,#7dfefa
+510 (0x1FE),511 (0x1FF),Boot Signature,#f0cfff
+512 (0x200),512 (0x200),Excess Space,#ffcc77

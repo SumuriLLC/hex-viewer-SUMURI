@@ -1,0 +1,5 @@
+0 (0x0),0 (0x0),Entry Type,#ffff00
+1 (0x1),1 (0x1),Bitmap Flags,#519f67
+2 (0x2),19 (0x13),Reserved,#111111
+20 (0x14),23 (0x17),First Cluster,#79b6ff
+24 (0x18),31 (0x1F),Data Length,#acf1ff

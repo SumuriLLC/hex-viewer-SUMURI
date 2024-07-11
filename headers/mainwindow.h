@@ -24,12 +24,14 @@ private slots:
     void onEndianCheckboxStateChanged(quint64 state);
     void onTabChanged(int index);
     void onSelectionChanged(const QByteArray &selectedData, quint64 startOffset, quint64 endOffset);
-    void onTagNameAndLength(const QString &tagName, quint64 length);
+    void onTagNameAndLength(const QString &tagName, quint64 length,QString tagColor);
 
 private:
     Ui::MainWindow *ui;
     DataTypeViewModel *dataTypeViewModel;
     FileSystemHandler *fsHandler;
+
+    void on_openDiskButton_clicked();
 
 
 

@@ -141,6 +141,18 @@
       </item>
       <item>
        <layout class="QVBoxLayout" name="verticalLayout">
+        <item>
+         <widget class="QLabel" name="labelSector">
+          <property name="font">
+           <font>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Sector:</string>
+          </property>
+         </widget>
+        </item>
         <item alignment="Qt::AlignHCenter|Qt::AlignVCenter">
          <widget class="QLabel" name="logo">
           <property name="minimumSize">

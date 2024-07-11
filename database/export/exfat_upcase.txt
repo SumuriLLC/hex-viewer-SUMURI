@@ -1,0 +1,6 @@
+0 (0x0),0 (0x0),Entry Type,#ff8000
+1 (0x1),3 (0x3),Reserved,#30ff90
+4 (0x4),7 (0x7),Table Checksum,#ff00ff
+8 (0x8),19 (0x13),Reserved,#bb1067
+20 (0x14),23 (0x17),First Cluster,#79b6b6
+24 (0x18),31 (0x1F),Data Length,#aca1d8

@@ -1,0 +1,4 @@
+0 (0x0),439 (0x1B7),Boot Code,#01ff67
+440 (0x1B8),443 (0x1BB),Disk Signature,#bb1067
+446 (0x1BE),509 (0x1FD),MPT Entry,#ff5800
+510 (0x1FE),511 (0x1FF),MBR Signature,#510667

@@ -1,0 +1,10 @@
+0 (0x0),0 (0x0),Boot Indicator,#ffff00
+1 (0x1),1 (0x1),Starting Head,#017667
+2 (0x2),2 (0x2),Starting Sector,#0000ff
+3 (0x3),3 (0x3),Starting Cylinder,#00ffff
+4 (0x4),4 (0x4),System Id,#ff00ff
+5 (0x5),5 (0x5),Ending Head,#bb1067
+6 (0x6),6 (0x6),Ending Sector,#017667
+7 (0x7),7 (0x7),Ending Cylinder,#519f67
+8 (0x8),11 (0xB),Starting LBA,#586600
+12 (0xC),15 (0xF),Size in LBA,#00ff00

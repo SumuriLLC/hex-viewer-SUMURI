@@ -4,7 +4,7 @@
 #include "headers/filesystemexception.h"
 #include "headers/tagshandler.h"
 #include "headers/ewfdevice.h"
-
+#include "headers/windowsdrivedevice.h"
 
 TestFileSystemHandler::TestFileSystemHandler()
 {
@@ -14,48 +14,30 @@ TestFileSystemHandler::TestFileSystemHandler()
 
 void TestFileSystemHandler::runTests()
 {
+   /* QString drivePath = "\\\\.\\PhysicalDrive1";
+    WindowsDriveDevice physicalDrive(drivePath);
 
-    /*
-    const char *ewf_file_path = "M:\\downloads\\Tim Doris Test Image\\Tim Doris Test Image\\testdata_202106282200.E01";
-
-    EwfDevice device;
-    if (!device.openEwf(ewf_file_path, QIODevice::ReadOnly)) {
-        qDebug() << "Failed to open EWF device.";
+    if (!physicalDrive.open(QIODevice::ReadOnly)) {
+        qCritical() << "Failed to open physical drive.";
         return;
     }
 
-    // Read data from the device
-    qint64 read_offset = 0;
-    qint64 read_size = 512;
-    char buffer[512];
+    qint64 seekOffset = 4;  // Example: seek to the second sector
 
-    if (device.seek(read_offset)) {
-        qint64 bytesRead = device.read(buffer, read_size);
-        if (bytesRead > 0) {
-            qDebug() << "Read data at offset" << read_offset << ":" << QByteArray(buffer, bytesRead).toHex();
-        } else {
-            qDebug() << "Failed to read data";
-        }
-    } else {
-        qDebug() << "Failed to seek to offset" << read_offset;
+    if (!physicalDrive.seek(seekOffset)) {
+        qCritical() << "Failed to seek to offset" << seekOffset << "on the drive.";
+        return;
+    }
+    QByteArray data = physicalDrive.read(1000); // Read the first 1000 bytes
+    if (data.isEmpty()) {
+        qCritical() << "Failed to read data from the drive.";
+        return;
     }
 
-    qDebug() << "Bytes availabele" << device.isReadable();
-    read_offset = 10;
+    QString hexData = data.toHex(' ').toUpper();
+    qDebug() << hexData;
 
-    if (device.seek(read_offset)) {
-        qint64 bytesRead = device.read(buffer, read_size);
-        if (bytesRead > 0) {
-            qDebug() << "Read data at offset" << read_offset << ":" << QByteArray(buffer, bytesRead).toHex() << " Size " << device.size();
-        } else {
-            qDebug() << "Failed to read data";
-        }
-    } else {
-       qDebug() << "Failed to seek to offset" << read_offset;
-    }
-
-    // Close the device
-    device.close();
+    physicalDrive.close();
 
 */
 }

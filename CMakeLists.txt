@@ -71,6 +71,14 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         libs/tags_sql.sql
         headers/ewfdevice.h
         ewfdevice.cpp
+        headers/physicaldrivesdialog.h
+        physicaldrivesdialog.cpp
+        physicaldrivesdialog.ui
+        headers/windowsdrivedevice.h
+        windowsdrivedevice.cpp
+          ${CMAKE_SOURCE_DIR}/headers/searchform.h
+        searchform.cpp
+        searchform.ui
     )
     qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 else()
