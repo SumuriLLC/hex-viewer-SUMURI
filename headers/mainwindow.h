@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include "datatypeviewmodel.h"
 #include "filesystemhandler.h"
+#include "tagshandler.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -17,7 +18,11 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    void createNewTab(const QString &fileName);
+    void createNewTab(const QString &fileName,bool sync=true);
+    void setTagsHandler(TagsHandler *tagsHandler);
+    void setUserTagsHandler(TagsHandler *userTagsHandler);
+
+
 
 private slots:
     void openFile();
@@ -32,8 +37,12 @@ private:
     FileSystemHandler *fsHandler;
 
     void on_openDiskButton_clicked();
+    TagsHandler *tagsHandler;
+    TagsHandler *userTagsHandler;
 
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
 
 };
 

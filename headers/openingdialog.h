@@ -4,6 +4,7 @@
 #include <QDialog>
 #include <QAbstractButton>
 #include "loadingdialog.h"
+#include "tagshandler.h"
 
 
 namespace Ui {
@@ -21,12 +22,18 @@ public:
 
 private slots:
     void onSelectSourceClicked();
-    void onDialogButtonClicked(QAbstractButton *button);
+    bool onOkButtonClicked();
+    void onSelectOutputDirectoryClicked();
+    void onLoadCaseClicked();
+    void onOtherCaseClicked();
+    void onRecentFolderClicked();
 
 
 private:
     Ui::OpeningDialog *ui;
      LoadingDialog *loadingDialog;
+    TagsHandler *tagsHandler;
+
 
 };
 

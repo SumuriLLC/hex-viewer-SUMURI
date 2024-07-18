@@ -26,7 +26,9 @@ HexViewerForm::HexViewerForm(QWidget *parent)
     ,loadingDialog(new LoadingDialog(this))
     , tagsTableModel(new TagsTableModel(this))
     ,templateTagsTableModel(new TagsTableModel(this))
-    ,searchForm(new searchform(this))
+     ,searchForm(new searchform(this))
+    ,tagsHandler(nullptr)
+    ,userTagsHandler(nullptr)
 
 
 
@@ -98,6 +100,16 @@ HexViewerForm::HexViewerForm(QWidget *parent)
 
 }
 
+void HexViewerForm::setTagsHandler(TagsHandler *tagsHandler)
+{
+    this->tagsHandler = tagsHandler;
+}
+
+void HexViewerForm::setUserTagsHandler(TagsHandler *userTagsHandler)
+{
+    this->userTagsHandler = userTagsHandler;
+}
+
 void HexViewerForm::onOpenSearchForm()
 {
     ui->hexEditorWidget->clearSearchResults();
@@ -146,7 +158,7 @@ void HexViewerForm::onSearchNextButtonClicked()
 
 void HexViewerForm::updateTagsTable(const QVector<Tag> &tags)
 {
-    qDebug()<< "First tag" << tags.first().type;
+    //qDebug()<< "First tag" << tags.first().type;
     tagsTableModel->setTags(tags);
     templateTagsTableModel->setTags(tags);
 }
@@ -260,11 +272,12 @@ void HexViewerForm::openFile(const QString &fileName,int tabIndex)
     m_fileName = QDir::toNativeSeparators(fileName);
 
 
-    TagsHandler *tagsHandler = new TagsHandler("tags_database.db", "connection_" + QString::number(tabIndex));
+    //TagsHandler *tagsHandler = new TagsHandler("tags_database.db", "connection_" + QString::number(tabIndex));
 
     hexEditor->setTagsHandler(tagsHandler);
+    hexEditor->setUserTagsHandler(userTagsHandler);
 
-    hexEditor->setData(m_fileName);
+    hexEditor->setData(m_fileName, tabIndex);
 
     hexEditor->setSelectedByte(0);
 

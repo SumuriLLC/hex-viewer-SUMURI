@@ -19,8 +19,14 @@
 #include <QFileDialog>
 #include <windows.h>
 #include "headers/windowsdrivedevice.h"
-
-
+#include <algorithm>
+#include <fstream>
+#include <iterator>
+#include <vector>
+#include <QMessageBox>
+#include <QFuture>
+#include <QFutureWatcher>
+#include <QtConcurrent>
 
 HexEditor::HexEditor(QWidget *parent)
     : QAbstractScrollArea(parent),
@@ -36,7 +42,11 @@ HexEditor::HexEditor(QWidget *parent)
     startBlockOffset(0),
     startBlockSelected(false),
     tagsHandler(nullptr),
-    currentSearchIndex(-1)
+    userTagsHandler(nullptr),
+    currentTabIndex(0),
+    currentSearchIndex(-1),
+    loadingDialog(new LoadingDialog(this)),
+    file_name("")
 {
     setFont(QFont("Courier New", 10));
     QFontMetrics fm(font());
@@ -64,14 +74,20 @@ void HexEditor::setTagsHandler(TagsHandler *tagsHandler)
     this->tagsHandler = tagsHandler;
 }
 
+void HexEditor::setUserTagsHandler(TagsHandler *userTagsHandler)
+{
+    this->userTagsHandler = userTagsHandler;
+}
 
 
 
-void HexEditor::setData(const QString &filePath)
+
+void HexEditor::setData(const QString &filePath,int tabIndex)
 {
 
 
-
+    file_name=filePath;
+    currentTabIndex=tabIndex;
     QFileInfo fileInfo(filePath);
     delete device; // Clean up any previously used device
 
@@ -135,6 +151,20 @@ void HexEditor::setData(const QString &filePath)
     selection.first = -1;
     selection.second = -1;
     selectedOffsets.clear();
+
+
+    //Set saved tags from disk
+
+    QList<Tag> userTags = userTagsHandler->getUserTagsFromUserDB(tabIndex);
+    QList<Tag> templateTags = userTagsHandler->getTemplateTagsFromUserDB(tabIndex);
+
+    for (const Tag &tag : userTags) {
+        addTag(tag.offset, tag.length, tag.description, QColor(tag.color), tag.type);
+    }
+
+    for (const Tag &tag : templateTags) {
+        addTag(tag.offset, tag.length, tag.description, QColor(tag.color), tag.type);
+    }
     viewport()->update();
 }
 
@@ -850,6 +880,7 @@ void HexEditor::onApplyTags(QString category)
     }
 
     viewport()->update(); // Refresh the viewport to apply the new tags
+
     //qDebug() << category<< " tags applied successfully.";
 }
 
@@ -966,17 +997,23 @@ void HexEditor::scrollContentsBy(int dx, int dy)
 void HexEditor::addTag(quint64 offset, quint64 length, const QString &description, const QColor &color, const QString &type)
 {
 
-    //qDebug() << "Adding tags" << type;
+    qDebug() << "Adding tags" << type;
 
     tags.append(Tag{offset, length, description, color.name(),"",type});
+
     emit tagsUpdated(tags);
 
     viewport()->update();
+
+
 }
 
 void HexEditor::clearTags(){
     tags.clear();
+
     emit tagsUpdated(tags);
+
+
 }
 
 
@@ -990,8 +1027,10 @@ void HexEditor::removeTag(quint64 offset, int index)
 
     if (it != tags.end()) {
         tags.erase(it, tags.end());
+
         emit tagsUpdated(tags);
         viewport()->update();
+
     } else {
         qDebug() << "No tag found at offset" << offset;
     }
@@ -1026,7 +1065,7 @@ void HexEditor::importTags(const QString &tagType)
         QString description = parts[2];
         QString color = parts[3];
 
-        addTag(offset, length, description, QColor(color), tagType); // Use the tagType parameter
+        addTag(offset, length, description, QColor(color), tagType);
     }
 
     file.close();
@@ -1117,97 +1156,72 @@ void HexEditor::search(const QString &pattern, SearchType type)
 void HexEditor::searchInHex(const QByteArray &pattern)
 {
     searchResults.clear();
-    int patternSize = pattern.size();
-    for (quint64 i = 0; i <= fileSize - patternSize; ++i) {
-        device->seek(i);
-        QByteArray chunk = device->read(patternSize);
-        if (chunk == pattern) {
-            searchResults.append(qMakePair(i, i + patternSize - 1));
-            break;
-        }
-    }
-    currentSearchIndex = 0;
+
+    searchInHexFromPosition(pattern, 0);
+
     if (!searchResults.isEmpty()) {
-
-
-        highligtedOffsets.clear();
+        setSelectedByte(searchResults.first().first);
         quint64 searchStart = searchResults.first().first;
 
-       // qDebug() << "pattern Size searchInHex : " << pattern.size();
-
+        highligtedOffsets.clear();
         for (int i = 0; i < pattern.size(); ++i) {
             highligtedOffsets.insert(searchStart + i);
         }
-
-        setSelectedByte(searchResults.first().first);
     }
+
     viewport()->update();
 }
 
 void HexEditor::searchInAscii(const QString &pattern)
 {
 
-    //qDebug() << "searching....." << pattern;
     searchResults.clear();
-    QByteArray patternBytes = pattern.toUtf8();
-    int patternSize = patternBytes.size();
-    for (quint64 i = 0; i <= fileSize - patternSize; ++i) {
-        device->seek(i);
-        QByteArray chunk = device->read(patternSize);
-        if (chunk == patternBytes) {
-            searchResults.append(qMakePair(i, i + patternSize - 1));
-            break;
-        }
-    }
 
-   // qDebug() << "searchResults....." << searchResults;
+    searchInAsciiFromPosition(pattern, 0);
 
-    currentSearchIndex = 0;
     if (!searchResults.isEmpty()) {
-
+        setSelectedByte(searchResults.first().first);
+        quint64 searchStart = searchResults.first().first;
 
         highligtedOffsets.clear();
-        quint64 searchStart = searchResults.first().first;
-        QByteArray patternBytes = currentSearchPattern.toUtf8();
-        for (int i = 0; i < patternBytes.size(); ++i) {
+        for (int i = 0; i < pattern.size(); ++i) {
             highligtedOffsets.insert(searchStart + i);
         }
-        setSelectedByte(searchResults.first().first);
     }
+
     viewport()->update();
+
 }
 
 void HexEditor::searchInUtf16(const QString &pattern)
 {
     searchResults.clear();
-    const char16_t *patternUtf16 = reinterpret_cast<const char16_t *>(pattern.utf16());
-    QByteArray patternBytes(reinterpret_cast<const char *>(patternUtf16), pattern.size() * 2);
-    int patternSize = patternBytes.size();
-    for (quint64 i = 0; i <= fileSize - patternSize; ++i) {
-        device->seek(i);
-        QByteArray chunk = device->read(patternSize);
-        if (chunk == patternBytes) {
-            searchResults.append(qMakePair(i, i + patternSize - 1));
-            break;
-        }
-    }
-    currentSearchIndex = 0;
+
+    searchInUtf16FromPosition(pattern, 0);
+
     if (!searchResults.isEmpty()) {
+        setSelectedByte(searchResults.first().first);
+        quint64 searchStart = searchResults.first().first;
 
         highligtedOffsets.clear();
-        quint64 searchStart = searchResults.first().first;
-        for (int i = 0; i < patternSize; ++i) {
+        for (int i = 0; i < pattern.size(); ++i) {
             highligtedOffsets.insert(searchStart + i);
         }
-        setSelectedByte(searchResults.first().first);
     }
+
     viewport()->update();
 }
 
 
 void HexEditor::nextSearch()
 {
-    if (searchResults.isEmpty()) return;
+    if (searchResults.isEmpty())
+    {
+
+        return;
+    }
+
+
 
     quint64 startPosition = searchResults.last().second + 1;
     searchResults.clear();
@@ -1269,80 +1283,91 @@ void HexEditor::nextSearch()
 
 void HexEditor::searchInHexFromPosition(const QByteArray &pattern, quint64 startPosition)
 {
-    int patternSize = pattern.size();
-    const int chunkSize = 4096;
-    QByteArray buffer;
-    device->seek(startPosition);
+    const int chunkSize = 4096; // Read in chunks of 4 KB
+    std::ifstream is(file_name.toStdString(), std::ios::binary);
+    if (!is) return;
 
-    while (!device->atEnd()) {
-        buffer.append(device->read(chunkSize));
+    is.seekg(startPosition);
+    std::vector<char> buffer(chunkSize + pattern.size() - 1);
+    quint64 currentPos = startPosition;
 
-        // Search for the pattern in the buffer
-        for (int i = 0; i <= buffer.size() - patternSize; ++i) {
-            if (buffer.mid(i, patternSize) == pattern) {
-                searchResults.append(qMakePair(startPosition + i, startPosition + i + patternSize - 1));
-                return;
-            }
+    while (is) {
+        is.read(buffer.data(), buffer.size());
+        std::streamsize bytesRead = is.gcount();
+        if (bytesRead < pattern.size()) break;
+
+        auto res = std::search(buffer.begin(), buffer.begin() + bytesRead, pattern.begin(), pattern.end());
+        if (res != buffer.begin() + bytesRead) {
+            quint64 matchPos = currentPos + std::distance(buffer.begin(), res);
+            searchResults.append(qMakePair(matchPos, matchPos + pattern.size() - 1));
+            break;
         }
 
-        // Retain the last part of the buffer that might contain the start of the pattern
-        buffer = buffer.right(patternSize - 1);
-        startPosition += chunkSize;
+        currentPos += chunkSize;
+        is.seekg(currentPos);
     }
 }
 
+
 void HexEditor::searchInAsciiFromPosition(const QString &pattern, quint64 startPosition)
 {
-    //qDebug() << "next searching " << pattern << "from pos" << startPosition;
+    qDebug() << "next searching " << pattern << "from pos" << startPosition;
     QByteArray patternBytes = pattern.toUtf8();
-    int patternSize = patternBytes.size();
-    const int chunkSize = 4096;
-    QByteArray buffer;
-    device->seek(startPosition);
+    const int chunkSize = 4096; // Read in chunks of 4 KB
+    std::ifstream is(file_name.toStdString(), std::ios::binary);
+    if (!is) return;
 
-    while (!device->atEnd()) {
-        buffer.append(device->read(chunkSize));
+    is.seekg(startPosition);
+    std::vector<char> buffer(chunkSize + patternBytes.size() - 1);
+    quint64 currentPos = startPosition;
 
-        // Search for the pattern in the buffer
-        for (int i = 0; i <= buffer.size() - patternSize; ++i) {
-            if (buffer.mid(i, patternSize) == patternBytes) {
-                searchResults.append(qMakePair(startPosition + i, startPosition + i + patternSize - 1));
-               // qDebug() << "searchResults " << searchResults;
-                return;
-            }
+    while (is) {
+        is.read(buffer.data(), buffer.size());
+        std::streamsize bytesRead = is.gcount();
+        if (bytesRead < patternBytes.size()) break;
+
+        auto res = std::search(buffer.begin(), buffer.begin() + bytesRead, patternBytes.begin(), patternBytes.end());
+        if (res != buffer.begin() + bytesRead) {
+            quint64 matchPos = currentPos + std::distance(buffer.begin(), res);
+            searchResults.append(qMakePair(matchPos, matchPos + patternBytes.size() - 1));
+            qDebug() << "searchResults " << searchResults;
+            return;
         }
 
-        // Retain the last part of the buffer that might contain the start of the pattern
-        buffer = buffer.right(patternSize - 1);
-        startPosition += chunkSize;
+        currentPos += chunkSize;
+        is.seekg(currentPos);
     }
 
-   // qDebug() << "searchResults " << searchResults;
+    qDebug() << "searchResults " << searchResults;
+
 }
 
 void HexEditor::searchInUtf16FromPosition(const QString &pattern, quint64 startPosition)
 {
     const char16_t *patternUtf16 = reinterpret_cast<const char16_t *>(pattern.utf16());
     QByteArray patternBytes(reinterpret_cast<const char *>(patternUtf16), pattern.size() * 2);
-    int patternSize = patternBytes.size();
-    const int chunkSize = 4096;
-    QByteArray buffer;
-    device->seek(startPosition);
+    const int chunkSize = 4096; // Read in chunks of 4 KB
+    std::ifstream is(file_name.toStdString(), std::ios::binary);
+    if (!is) return;
 
-    while (!device->atEnd()) {
-        buffer.append(device->read(chunkSize));
+    is.seekg(startPosition);
+    std::vector<char> buffer(chunkSize + patternBytes.size() - 1);
+    quint64 currentPos = startPosition;
 
-        // Search for the pattern in the buffer
-        for (int i = 0; i <= buffer.size() - patternSize; ++i) {
-            if (buffer.mid(i, patternSize) == patternBytes) {
-                searchResults.append(qMakePair(startPosition + i, startPosition + i + patternSize - 1));
-                return;
-            }
+    while (is) {
+        is.read(buffer.data(), buffer.size());
+        std::streamsize bytesRead = is.gcount();
+        if (bytesRead < patternBytes.size()) break;
+
+        auto res = std::search(buffer.begin(), buffer.begin() + bytesRead, patternBytes.begin(), patternBytes.end());
+        if (res != buffer.begin() + bytesRead) {
+            quint64 matchPos = currentPos + std::distance(buffer.begin(), res);
+            searchResults.append(qMakePair(matchPos, matchPos + patternBytes.size() - 1));
+            break;
         }
 
-        // Retain the last part of the buffer that might contain the start of the pattern
-        buffer = buffer.right(patternSize - 1);
-        startPosition += chunkSize;
+        currentPos += chunkSize;
+        is.seekg(currentPos);
     }
 }
 
@@ -1358,4 +1383,27 @@ void  HexEditor::clearSearchResults(){
 
 }
 
+void HexEditor::syncTagsOnClose()
+{
+
+    loadingDialog->setMessage("Saving data.please wait...");
+    loadingDialog->show();
+    qApp->processEvents();
+
+
+    if (userTagsHandler) {
+        QFuture<void> future = QtConcurrent::run([this]() {
+            userTagsHandler->syncTags(tags, currentTabIndex);
+        });
+        QFutureWatcher<void> *watcher = new QFutureWatcher<void>();
+        connect(watcher, &QFutureWatcher<void>::finished, [watcher]() {
+            qDebug() << "Tags synced successfully on close.";
+            //loadingDialog->hide();
+
+            watcher->deleteLater();
+        });
+        watcher->setFuture(future);
+        watcher->waitForFinished();
+    }
+}
 

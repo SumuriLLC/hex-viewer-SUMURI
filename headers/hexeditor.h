@@ -11,6 +11,7 @@
 #include "tag.h"
 #include "tagshandler.h"
 #include "ewfdevice.h"
+#include "loadingdialog.h"
 
 
 class HexEditor : public QAbstractScrollArea
@@ -19,7 +20,7 @@ class HexEditor : public QAbstractScrollArea
 
 public:
     explicit HexEditor(QWidget *parent = nullptr);
-    void setData(const QString &filePath);
+    void setData(const QString &filePath,int tabIndex);
     QByteArray getData() const;
     void changeBytesPerLine(quint64 newBytesPerLine);
     void setSelectedBytes(const QByteArray &selectedBytes);
@@ -37,7 +38,10 @@ public:
     void exportTags(const QString &type);
     void importTags(const QString &tagType);
     void exportTagDataByOffset(quint64 offset, const QString &fileName);
+
     void setTagsHandler(TagsHandler *tagsHandler);
+    void setUserTagsHandler(TagsHandler *userTagsHandler);
+
 
     enum class SearchType {
         Hex,
@@ -51,6 +55,8 @@ public:
     void clearSearchResults();
 
 
+public slots:
+    void syncTagsOnClose();
 
 signals:
     void selectionChanged(const QByteArray &selectedData, quint64 startOffset, quint64 endOffset);
@@ -125,6 +131,8 @@ private:
     void onEndBlock();
 
      TagsHandler *tagsHandler;
+    TagsHandler *userTagsHandler;
+
 
     QList<QPair<quint64, quint64>> searchResults;
     int currentSearchIndex;
@@ -137,6 +145,11 @@ private:
     void searchInHexFromPosition(const QByteArray &pattern, quint64 startPosition);
     void searchInAsciiFromPosition(const QString &pattern, quint64 startPosition);
     void searchInUtf16FromPosition(const QString &pattern, quint64 startPosition);
+
+    QString file_name;
+
+    int currentTabIndex;
+    LoadingDialog *loadingDialog;
 
 
 };

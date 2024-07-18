@@ -42,6 +42,9 @@ public:
     void openFile(const QString &fileName,int tabIndex);
     HexEditor* hexEditor() const;
     QByteArray getSelectedData() const;
+    void setTagsHandler(TagsHandler *tagsHandler);
+    void setUserTagsHandler(TagsHandler *userTagsHandler);
+
 
 private slots:
     void onShowTablesClicked();
@@ -95,6 +98,9 @@ private:
     void onTemplateTagTableDoubleClicked(const QModelIndex &index);
 
      searchform *searchForm;
+    TagsHandler *tagsHandler;
+     TagsHandler *userTagsHandler;
+
 
 
 };

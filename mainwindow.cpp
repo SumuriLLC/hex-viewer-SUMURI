@@ -2,7 +2,7 @@
 #include "ui_mainwindow.h"
 #include <QInputDialog>
 #include "headers/physicaldrivesdialog.h"
-
+#include <QCloseEvent>
 
 
 //Multiple instances will be created for each tab Form
@@ -15,6 +15,8 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     ,dataTypeViewModel(new DataTypeViewModel(this))
+    ,tagsHandler(nullptr)
+    ,userTagsHandler(nullptr)
 {
     ui->setupUi(this);
     connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::openFile);
@@ -41,6 +43,17 @@ MainWindow::MainWindow(QWidget *parent)
 
 }
 
+
+void MainWindow::setTagsHandler(TagsHandler *tagsHandler)
+{
+    this->tagsHandler = tagsHandler;
+}
+
+void MainWindow::setUserTagsHandler(TagsHandler *userTagsHandler)
+{
+    this->userTagsHandler = userTagsHandler;
+}
+
 MainWindow::~MainWindow()
 {
     delete ui;
@@ -65,11 +78,22 @@ void MainWindow::on_openDiskButton_clicked()
         }
     }
 }
-//A new instance
-void MainWindow::createNewTab(const QString &fileName)
+void MainWindow::createNewTab(const QString &fileName, bool sync)
 {
     HexViewerForm *hexViewerForm = new HexViewerForm(this);
     quint64 index = ui->tabWidget->addTab(hexViewerForm, QFileInfo(fileName).fileName());
+
+    //TagsHandler *tagsHandler = new TagsHandler("tags_database.db", "connection");
+
+    if(sync){
+        userTagsHandler->addNewTab(fileName);
+
+    }
+
+    hexViewerForm->setTagsHandler(tagsHandler);
+    hexViewerForm->setUserTagsHandler(userTagsHandler);
+
+
     hexViewerForm->openFile(fileName,index);
 
     ui->tabWidget->setCurrentIndex(index);
@@ -161,6 +185,19 @@ void MainWindow::onTagNameAndLength(const QString &tagName, quint64 length, QStr
 
 }
 
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    for (int i = 0; i < ui->tabWidget->count(); ++i) {
+        HexViewerForm *hexViewerForm = qobject_cast<HexViewerForm*>(ui->tabWidget->widget(i));
+        if (hexViewerForm) {
+            HexEditor *hexEditor = hexViewerForm->hexEditor();
+            if (hexEditor) {
+                hexEditor->syncTagsOnClose();
+            }
+        }
+    }
+    event->accept();
+}
 
 
 

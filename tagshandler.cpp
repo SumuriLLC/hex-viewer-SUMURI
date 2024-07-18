@@ -3,6 +3,8 @@
 #include <QSqlError>
 #include <QDebug>
 #include <QRandomGenerator>
+#include <QtConcurrent/QtConcurrent>
+
 
 
 TagsHandler::TagsHandler(const QString &dbPath, const QString &connectionName, QObject *parent)
@@ -17,7 +19,6 @@ TagsHandler::TagsHandler(const QString &dbPath, const QString &connectionName, Q
         qDebug() << "Database opened successfully with connection name" << db.connectionName();
     }
 
-    //initializeDatabase(); //We are manually initializing the database
 }
 
 TagsHandler::~TagsHandler()
@@ -29,28 +30,7 @@ TagsHandler::~TagsHandler()
 }
 
 
-void TagsHandler::initializeDatabase()
-{
-    ensureDatabaseOpen();
 
-    QSqlQuery query(db);
-    if (!query.exec("CREATE TABLE IF NOT EXISTS tags ("
-                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                    "offset INTEGER, "
-                    "length INTEGER, "
-                    "description TEXT, "
-                    "color TEXT, "
-                    "category TEXT)")) {
-        qDebug() << "Error: unable to create table" << query.lastError().text();
-    } else {
-        qDebug() << "Table created or verified successfully.";
-    }
-
-
-    insertExFATVBR();
-    insertFAT32SFN();
-
-}
 
 void TagsHandler::ensureDatabaseOpen() const
 {
@@ -107,6 +87,7 @@ QList<Tag> TagsHandler::getTagsByCategory(const QString &category) const
     query.prepare("SELECT offset, length, description, color, category,datatype FROM tags WHERE category = ?");
     query.addBindValue(category);
     if (!query.exec()) {
+
         qDebug() << "Error: unable to fetch tags by category" << query.lastError().text();
         return tags;
     }
@@ -120,6 +101,7 @@ QList<Tag> TagsHandler::getTagsByCategory(const QString &category) const
         tag.category = query.value(4).toString();
         tag.datatype = query.value(5).toString();
         tags.append(tag);
+        //qDebug() << "Tag" << tag.description;
     }
     return tags;
 }
@@ -135,174 +117,369 @@ void TagsHandler::addTemporaryTag(qint64 offset, qint64 length, const QString &d
     temporaryTags.append(tag);
 }
 
-void TagsHandler::saveTagsToDatabase()
+
+void TagsHandler::createMetadataTable(const QString &caseName, const QString &caseNumber)
 {
     ensureDatabaseOpen();
 
-    if (!db.isOpen()) {
-        qDebug() << "Database is not open, cannot save tags.";
-        return;
-    }
-
     QSqlQuery query(db);
-    for (const Tag &tag : temporaryTags) {
-        query.prepare("INSERT INTO tags (offset, length, description, color, category) VALUES (?, ?, ?, ?, ?)");
-        query.addBindValue(tag.offset);
-        query.addBindValue(tag.length);
-        query.addBindValue(tag.description);
-        query.addBindValue(tag.color);
-        query.addBindValue(tag.category);
-        if (!query.exec()) {
-            qDebug() << "Error: unable to insert tag" << query.lastError().text();
-        }
-    }
-    temporaryTags.clear();
-}
-
-void TagsHandler::updateTag(const Tag &tag)
-{
-    ensureDatabaseOpen();
-
-    if (!db.isOpen()) {
-        qDebug() << "Database is not open, cannot update tag.";
+    if (!query.exec("CREATE TABLE IF NOT EXISTS Metadata ("
+                    "name TEXT, "
+                    "value TEXT)")) {
+        qDebug() << "Error: unable to create Metadata table" << query.lastError().text();
         return;
+    } else {
+        qDebug() << "Metadata table created or verified successfully.";
     }
 
-    QSqlQuery query(db);
-    query.prepare("UPDATE tags SET length = ?, description = ?, color = ?, category = ? WHERE offset = ?");
-    query.addBindValue(tag.length);
-    query.addBindValue(tag.description);
-    query.addBindValue(tag.color);
-    query.addBindValue(tag.category);
-    query.addBindValue(tag.offset);
+    query.prepare("INSERT INTO Metadata (name, value) VALUES (?, ?)");
+
+    query.addBindValue("case_name");
+    query.addBindValue(caseName);
     if (!query.exec()) {
-        qDebug() << "Error: unable to update tag" << query.lastError().text();
+        qDebug() << "Error: unable to insert case name" << query.lastError().text();
+        return;
+    }
+
+    query.addBindValue("case_number");
+    query.addBindValue(caseNumber);
+    if (!query.exec()) {
+        qDebug() << "Error: unable to insert case number" << query.lastError().text();
+        return;
+    }
+
+
+
+    qDebug() << "Metadata inserted successfully.";
+}
+void TagsHandler::createTabTable()
+{
+    ensureDatabaseOpen();
+
+    QSqlQuery query(db);
+    if (!query.exec("CREATE TABLE IF NOT EXISTS Tab ("
+                    "TabIndex INTEGER, "
+                    "Filename TEXT)")) {
+        qDebug() << "Error: unable to create Tab table" << query.lastError().text();
+        return;
+    } else {
+        qDebug() << "Tab table created or verified successfully.";
+    }
+
+
+}
+
+void TagsHandler::addNewTab(const QString &sourcePath)
+{
+    ensureDatabaseOpen();
+
+    QSqlQuery query(db);
+
+    // Check if the Tab table is empty
+    if (!query.exec("SELECT COUNT(*) FROM Tab")) {
+        qDebug() << "Error: unable to check if Tab table is empty" << query.lastError().text();
+        return;
+    }
+
+    int count = 0;
+    if (query.next()) {
+        count = query.value(0).toInt();
+    }
+
+    int newTabIndex = 0;
+    if (count > 0) {
+        // Get the maximum TabIndex currently in the Tab table
+        if (!query.exec("SELECT MAX(TabIndex) FROM Tab")) {
+            qDebug() << "Error: unable to fetch maximum TabIndex" << query.lastError().text();
+            return;
+        }
+
+        if (query.next()) {
+            newTabIndex = query.value(0).toInt() + 1;
+        }
+    }
+
+    // Insert the new tab entry
+    query.prepare("INSERT INTO Tab (TabIndex, Filename) VALUES (?, ?)");
+    query.addBindValue(newTabIndex);
+    query.addBindValue(sourcePath);
+
+    if (!query.exec()) {
+        qDebug() << "Error: unable to insert new tab" << query.lastError().text();
+        return;
+    }
+
+    qDebug() << "New tab inserted successfully with TabIndex:" << newTabIndex;
+}
+
+
+
+QList<Tab> TagsHandler::getTabs() const
+{
+    ensureDatabaseOpen();
+
+    QList<Tab> tabs;
+    if (!db.isOpen()) {
+        qDebug() << "Database is not open, cannot fetch tabs.";
+        return tabs;
+    }
+
+    QSqlQuery query(db);
+    if (!query.exec("SELECT TabIndex, Filename FROM Tab")) {
+        qDebug() << "Error: unable to fetch tabs" << query.lastError().text();
+        return tabs;
+    }
+
+    while (query.next()) {
+        Tab tab;
+        tab.index = query.value(0).toInt();
+        tab.filename = query.value(1).toString();
+
+        tabs.append(tab);
+    }
+    return tabs;
+}
+
+void TagsHandler::createUserTagsTable()
+{
+    ensureDatabaseOpen();
+
+    QSqlQuery query(db);
+    if (!query.exec("CREATE TABLE IF NOT EXISTS UserTags ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "offset INTEGER, "
+                    "length INTEGER, "
+                    "description TEXT, "
+                    "color TEXT, "
+                    "category TEXT,"
+                    "tabID INTEGER)")) {
+        qDebug() << "Error: unable to create UserTags table" << query.lastError().text();
+    } else {
+        qDebug() << "UserTags table created or verified successfully.";
     }
 }
 
-void TagsHandler::deleteTag(const Tag &tag)
+void TagsHandler::createTemplateTagsTable()
 {
     ensureDatabaseOpen();
+
+    QSqlQuery query(db);
+    if (!query.exec("CREATE TABLE IF NOT EXISTS TemplateTags ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "offset INTEGER, "
+                    "length INTEGER, "
+                    "description TEXT, "
+                    "color TEXT, "
+                    "category TEXT,"
+                    "tabID INTEGER)")) {
+        qDebug() << "Error: unable to create TemplateTags table" << query.lastError().text();
+    } else {
+        qDebug() << "TemplateTags table created or verified successfully.";
+    }
+}
+
+void TagsHandler::syncTags(const QList<Tag> &tags, int tabID)
+{
+     QMutexLocker locker(&syncMutex);
+    ensureDatabaseOpen();
+
+
+    QSqlQuery query(db);
 
     if (!db.isOpen()) {
-        qDebug() << "Database is not open, cannot delete tag.";
+        qDebug() << "Error: Database is not open";
         return;
     }
 
-    QSqlQuery query(db);
-    query.prepare("DELETE FROM tags WHERE offset = ?");
-    query.addBindValue(tag.offset);
+    if (!query.prepare("DELETE FROM UserTags WHERE tabID = ?")) {
+        qDebug() << "Error: unable to prepare deletion from UserTags table" << query.lastError().text();
+        return;
+    }
+    query.addBindValue(tabID);
     if (!query.exec()) {
-        qDebug() << "Error: unable to delete tag" << query.lastError().text();
-    }
-}
-
-
-void TagsHandler::insertExFATVBR()
-{
-    ensureDatabaseOpen();
-
-    // Check if the ExFAT VBR data already exists in the database
-    QSqlQuery checkQuery(db);
-    checkQuery.prepare("SELECT COUNT(*) FROM tags WHERE category = ?");
-    checkQuery.addBindValue("exFAT VBR");
-    if (!checkQuery.exec() || !checkQuery.next() || checkQuery.value(0).toInt() > 0) {
-        qDebug() << "ExFAT VBR data already exists in the database.";
+        qDebug() << "Error: unable to clear UserTags table" << query.lastError().text();
         return;
     }
 
-    struct ExFATVBRData {
-        quint64 offset;
-        quint64 length;
-        QString description;
-    };
-
-    QList<ExFATVBRData> data = {
-        {0x00, 3, "Jump Instruction"},
-        {0x03, 8, "Volume Label"},
-        {0x40, 8, "Partition Start Address"},
-        {0x48, 8, "Volume Length"},
-        {0x50, 4, "FAT Offset"},
-        {0x54, 4, "FAT Length"},
-        {0x58, 4, "Cluster Heap Offset"},
-        {0x5C, 4, "Cluster Count"},
-        {0x60, 4, "First Cluster Of Root Count"},
-        {0x64, 4, "Volume Serial Number"},
-        {0x68, 2, "File System Revision"},
-        {0x6A, 2, "Volume Flags"},
-        {0x6C, 1, "Bytes Per Sector Shift"},
-        {0x6D, 1, "Sectors Per Cluster Shift"},
-        {0x6E, 1, "Number Of FATs"},
-        {0x70, 1, "Percent In Use"},
-        {0x1FE, 2, "Boot Signature"}
-    };
-
-    QSqlQuery query(db);
-    query.prepare("INSERT INTO tags (offset, length, description, color, category) VALUES (?, ?, ?, ?, ?)");
-    for (const ExFATVBRData &entry : data) {
-        QString randomColor = QString("#%1%2%3")
-                                  .arg(QRandomGenerator::global()->bounded(256), 2, 16, QChar('0'))
-                                  .arg(QRandomGenerator::global()->bounded(256), 2, 16, QChar('0'))
-                                  .arg(QRandomGenerator::global()->bounded(256), 2, 16, QChar('0')).toUpper();
-        query.addBindValue(entry.offset);
-        query.addBindValue(entry.length);
-        query.addBindValue(entry.description);
-        query.addBindValue(randomColor); // Random color
-        query.addBindValue("exFAT VBR"); // Default category
-        if (!query.exec()) {
-            qDebug() << "Error: unable to insert exFAT VBR data" << query.lastError().text();
-        }
+    if (!query.prepare("DELETE FROM TemplateTags WHERE tabID = ?")) {
+        qDebug() << "Error: unable to prepare deletion from TemplateTags table" << query.lastError().text();
+        return;
     }
-}
-
-void TagsHandler::insertFAT32SFN()
-{
-    ensureDatabaseOpen();
-
-    // Check if the FAT32 SFN data already exists in the database
-    QSqlQuery checkQuery(db);
-    checkQuery.prepare("SELECT COUNT(*) FROM tags WHERE category = ?");
-    checkQuery.addBindValue("FAT32 SFN");
-    if (!checkQuery.exec() || !checkQuery.next() || checkQuery.value(0).toInt() > 0) {
-        qDebug() << "FAT32 SFN data already exists in the database.";
+    query.addBindValue(tabID);
+    if (!query.exec()) {
+        qDebug() << "Error: unable to clear TemplateTags table" << query.lastError().text();
         return;
     }
 
-    struct FAT32SFNData {
-        quint64 offset;
-        quint64 length;
-        QString description;
-    };
 
-    QList<FAT32SFNData> data = {
-        {0x00, 8, "Filename"},
-        {0x08, 3, "File Extension"},
-        {0x0B, 1, "File Attribute"},
-        {0x0C, 1, "Millisecond stamp"},
-        {0x0E, 2, "File Creation Time"},
-        {0x10, 2, "File Creation Date"},
-        {0x12, 2, "Last Accessed Date"},
-        {0x14, 2, "Cluster high word"},
-        {0x16, 2, "Last write time"},
-        {0x18, 2, "Last write date"},
-        {0x1A, 2, "Cluster low word"},
-        {0x1C, 4, "File Size"}
-    };
 
-    QSqlQuery query(db);
-    query.prepare("INSERT INTO tags (offset, length, description, color, category) VALUES (?, ?, ?, ?, ?)");
-    for (const FAT32SFNData &entry : data) {
-        QString randomColor = QString("#%1%2%3")
-                                  .arg(QRandomGenerator::global()->bounded(256), 2, 16, QChar('0'))
-                                  .arg(QRandomGenerator::global()->bounded(256), 2, 16, QChar('0'))
-                                  .arg(QRandomGenerator::global()->bounded(256), 2, 16, QChar('0')).toUpper();
-        query.addBindValue(entry.offset);
-        query.addBindValue(entry.length);
-        query.addBindValue(entry.description);
-        query.addBindValue(randomColor); // Random color
-        query.addBindValue("FAT32 SFN"); // Default category
-        if (!query.exec()) {
-            qDebug() << "Error: unable to insert FAT32 SFN data" << query.lastError().text();
+    QSqlQuery userQuery(db);
+    QSqlQuery templateQuery(db);
+
+
+
+    userQuery.prepare("INSERT INTO UserTags (offset, length, description, color, category, tabID) VALUES (?, ?, ?, ?, ?,?)");
+    templateQuery.prepare("INSERT INTO TemplateTags (offset, length, description, color, category, tabID) VALUES (?, ?, ?, ?, ?,?)");
+
+
+    for (const Tag &tag : tags) {
+      //  qDebug() << "Syncing..." << tag.description << " of type" << tag.type;
+
+        if (tag.type == "user") {
+            userQuery.addBindValue(tag.offset);
+            userQuery.addBindValue(tag.length);
+            userQuery.addBindValue(tag.description);
+            userQuery.addBindValue(tag.color);
+            userQuery.addBindValue(tag.category);
+            userQuery.addBindValue(tabID);
+
+            if (!userQuery.exec()) {
+                qDebug() << "Error: unable to insert user tag" << userQuery.lastError().text();
+            }
+        } else if (tag.type == "template") {
+            templateQuery.addBindValue(tag.offset);
+            templateQuery.addBindValue(tag.length);
+            templateQuery.addBindValue(tag.description);
+            templateQuery.addBindValue(tag.color);
+            templateQuery.addBindValue(tag.category);
+            templateQuery.addBindValue(tabID);
+
+            if (!templateQuery.exec()) {
+                qDebug() << "Error: unable to insert template tag" << templateQuery.lastError().text();
+            }
         }
     }
+
+    qDebug() << "Tags synced successfully.";
+}
+
+QList<Tag> TagsHandler::getUserTagsFromUserDB(int tabID) const
+{
+    ensureDatabaseOpen();
+
+    QList<Tag> tags;
+    if (!db.isOpen()) {
+        qDebug() << "Database is not open, cannot fetch user tags.";
+        return tags;
+    }
+
+    QSqlQuery query(db);
+    query.prepare("SELECT offset, length, description, color, category FROM UserTags WHERE tabID = ?");
+    query.addBindValue(tabID);
+    if (!query.exec()) {
+        qDebug() << "Error: unable to fetch user tags" << query.lastError().text();
+        return tags;
+    }
+
+    while (query.next()) {
+        Tag tag;
+        tag.offset = query.value(0).toLongLong();
+        tag.length = query.value(1).toLongLong();
+        tag.description = query.value(2).toString();
+        tag.color = query.value(3).toString();
+        tag.category = query.value(4).toString();
+        tag.type = "user";
+
+        tags.append(tag);
+    }
+    return tags;
+}
+
+QList<Tag> TagsHandler::getTemplateTagsFromUserDB(int tabID) const
+{
+    ensureDatabaseOpen();
+
+    QList<Tag> tags;
+    if (!db.isOpen()) {
+        qDebug() << "Database is not open, cannot fetch template tags.";
+        return tags;
+    }
+
+    QSqlQuery query(db);
+    query.prepare("SELECT offset, length, description, color, category FROM TemplateTags WHERE tabID = ?");
+    query.addBindValue(tabID);
+    if (!query.exec()) {
+        qDebug() << "Error: unable to fetch template tags" << query.lastError().text();
+        return tags;
+    }
+
+    while (query.next()) {
+        Tag tag;
+        tag.offset = query.value(0).toLongLong();
+        tag.length = query.value(1).toLongLong();
+        tag.description = query.value(2).toString();
+        tag.color = query.value(3).toString();
+        tag.category = query.value(4).toString();
+        tag.type = "template";
+
+        tags.append(tag);
+    }
+    return tags;
+}
+
+void TagsHandler::addRecentFolder(const QString &path)
+{
+    ensureDatabaseOpen();
+
+    QSqlQuery query(db);
+
+    // Insert the new folder path
+    query.prepare("INSERT INTO RecentFolders (path) VALUES (?)");
+    query.addBindValue(path);
+
+    if (!query.exec()) {
+        qDebug() << "Error: unable to insert recent folder" << query.lastError().text();
+        return;
+    }
+
+    // Check the total number of entries
+    if (!query.exec("SELECT COUNT(*) FROM RecentFolders")) {
+        qDebug() << "Error: unable to count recent folders" << query.lastError().text();
+        return;
+    }
+
+    int count = 0;
+    if (query.next()) {
+        count = query.value(0).toInt();
+    }
+
+    // Delete the oldest entries if count exceeds 10
+   if (count > 10) {
+        if (!query.exec("DELETE FROM RecentFolders WHERE id IN (SELECT id FROM RecentFolders ORDER BY id ASC LIMIT " + QString::number(count - 10) + ")")) {
+            qDebug() << "Error: unable to delete old recent folders" << query.lastError().text();
+            return;
+        }
+    }
+
+    qDebug() << "Recent folder inserted successfully: " << path;
+}
+
+QList<QString> TagsHandler::getRecentFolders() const
+{
+    ensureDatabaseOpen();
+
+    QList<QString> folders;
+    if (!db.isOpen()) {
+        qDebug() << "Database is not open, cannot fetch recent folders.";
+        return folders;
+    }
+
+    QSqlQuery query(db);
+    if (!query.exec("SELECT path FROM RecentFolders ORDER BY id DESC LIMIT 10")) {
+        qDebug() << "Error: unable to fetch recent folders" << query.lastError().text();
+        return folders;
+    }
+
+    while (query.next()) {
+        folders.append(query.value(0).toString());
+    }
+    return folders;
+}
+
+
+
+
+QFuture<void> TagsHandler::syncTagsAsync(const QList<Tag> &tags, int tabID)
+{
+    return QtConcurrent::run([this, tags, tabID]() { syncTags(tags, tabID); });
 }

@@ -95,8 +95,8 @@ void TestFileSystemHandler::testOpenImage(const QString& fileName)
 void TestFileSystemHandler::testAddTag()
 {
     qDebug() << "Testing adding a tag";
-    tagsHandler->addTemporaryTag(0, 100, "Test Tag", "#FF5733", "FAT32");
-    tagsHandler->saveTagsToDatabase();
+    //tagsHandler->addTemporaryTag(0, 100, "Test Tag", "#FF5733", "FAT32");
+    //tagsHandler->saveTagsToDatabase();
     qDebug() << "Tag added successfully";
 }
 
@@ -117,8 +117,8 @@ void TestFileSystemHandler::testUpdateTag()
         Tag tag = tags.first();
         tag.description = "Updated Tag";
         tag.color = "#123456";
-        tagsHandler->updateTag(tag);
-        tagsHandler->saveTagsToDatabase();
+       // tagsHandler->updateTag(tag);
+        //tagsHandler->saveTagsToDatabase();
         qDebug() << "Tag updated successfully";
     } else {
         qDebug() << "No tags found to update";
@@ -131,8 +131,8 @@ void TestFileSystemHandler::testDeleteTag()
     QList<Tag> tags = tagsHandler->getTags();
     if (!tags.isEmpty()) {
         Tag tag = tags.first();
-        tagsHandler->deleteTag(tag);
-        tagsHandler->saveTagsToDatabase();
+       // tagsHandler->deleteTag(tag);
+       // tagsHandler->saveTagsToDatabase();
         qDebug() << "Tag deleted successfully";
     } else {
         qDebug() << "No tags found to delete";

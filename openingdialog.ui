@@ -29,7 +29,7 @@
     <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
    </property>
   </widget>
-  <widget class="QPushButton" name="pushButton_2">
+  <widget class="QPushButton" name="outputDirectoryPushButton">
    <property name="geometry">
     <rect>
      <x>730</x>
@@ -143,6 +143,9 @@
       <height>0</height>
      </size>
     </property>
+    <property name="placeholderText">
+     <string>Select Forensic Image / Physical Drive ...</string>
+    </property>
    </widget>
   </widget>
   <widget class="QLabel" name="label_2">
@@ -246,6 +249,9 @@
       <height>0</height>
      </size>
     </property>
+    <property name="placeholderText">
+     <string>Select Directory for Case...</string>
+    </property>
    </widget>
   </widget>
   <widget class="QLabel" name="label_3">
@@ -298,7 +304,7 @@
      </widget>
     </item>
     <item>
-     <widget class="QPushButton" name="pushButton_4">
+     <widget class="QPushButton" name="loadCasepushButton">
       <property name="text">
        <string>Load Case</string>
       </property>
