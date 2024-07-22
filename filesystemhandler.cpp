@@ -4,11 +4,19 @@
 #include <QDateTime>
 #include <tsk/libtsk.h>
 #include <tsk/tsk_tools_i.h>
+#include <tsk/fs/tsk_fatxxfs.h>
+#include <tsk/fs/tsk_ext2fs.h>
+
+
 #include <QFile>
 #include <QIODevice>
 
 FileSystemHandler::FileSystemHandler(QObject *parent)
-    : QObject(parent), img(nullptr), vs(nullptr), fsOpenedDirectly(false)
+    : QObject(parent),
+    fileSystemType(""),
+    img(nullptr),
+    vs(nullptr),
+    fsOpenedDirectly(false)
 {
 }
 
@@ -42,6 +50,9 @@ bool FileSystemHandler::openImage(const QString &fileName)
             qDebug() << "Failed to open volume system, trying to open as file system...";
             return openImageAsFileSystem();
         }
+
+
+
 
         return true;
 
@@ -141,8 +152,19 @@ QList<QStringList> FileSystemHandler::listFilesInDirectory(int partitionIndex, c
             throw FileSystemException("Failed to open directory: " + directoryPath);
         }
 
+        bool dotFound = false;
+        bool dotDotFound = false;
+
         for (size_t i = 0; i < dir->names_used; i++) {
             TSK_FS_NAME *fs_name = &dir->names[i];
+
+            if (QString::fromUtf8(fs_name->name) == ".") {
+                dotFound = true;
+            }
+            if (QString::fromUtf8(fs_name->name) == "..") {
+                dotDotFound = true;
+            }
+
             TSK_FS_FILE *file = tsk_fs_file_open_meta(fs, nullptr, fs_name->meta_addr);
             if (!file) {
                 qDebug() << "File " << fs_name->name << " could not be read";
@@ -172,7 +194,64 @@ QList<QStringList> FileSystemHandler::listFilesInDirectory(int partitionIndex, c
 
             fileList.append(fileAttributes);
 
+
+
+
+
             tsk_fs_file_close(file);
+        }
+
+        if (fs->ftype == TSK_FS_TYPE_EXFAT) {
+
+            if (!dotDotFound) {
+                QString parentPath = directoryPath;
+                if (parentPath.endsWith('/')) {
+                    parentPath.chop(1);
+                }
+                parentPath = parentPath.left(parentPath.lastIndexOf('/'));
+                if (parentPath.isEmpty()) {
+                    parentPath = "/";
+                }
+
+                QStringList dotDotAttributes;
+                dotDotAttributes << ".."
+                                 << parentPath
+                                 << "Directory"
+                                 << ""
+                                 << ""
+                                 << ""
+                                 << ""
+                                 << ""
+                                 << ""
+                                 << "Directory";
+                fileList.prepend(dotDotAttributes);
+            }
+
+            if (!dotFound) {
+                QStringList dotAttributes;
+                dotAttributes << "."
+                              << directoryPath
+                              << "Directory"
+                              << ""
+                              << ""
+                              << ""
+                              << ""
+                              << ""
+                              << ""
+                              << "Directory";
+                fileList.prepend(dotAttributes);
+            }
+
+        }
+
+        // fileSystemType
+
+        if( fs->ftype == TSK_FS_TYPE_EXFAT || fs->ftype == TSK_FS_TYPE_FAT12 || fs->ftype == TSK_FS_TYPE_FAT16 || fs->ftype == TSK_FS_TYPE_FAT32 ){
+            fileSystemType="FAT";
+        }
+
+        if( fs->ftype == TSK_FS_TYPE_NTFS ){
+            fileSystemType="NTFS";
         }
 
         tsk_fs_dir_close(dir);
@@ -315,7 +394,7 @@ void FileSystemHandler::exportFileContents(int partitionIndex, const QString &fi
 
 quint64 FileSystemHandler::getFileOffset(int partitionIndex, const QString &filePath)
 {
-    qDebug() << "Going to file offset partitionIndex" << partitionIndex << " for path " << filePath;
+    qDebug() << "Getting file offset for partitionIndex" << partitionIndex << " and file path " << filePath;
 
     TSK_FS_INFO *fs = getFileSystem(partitionIndex);
     if (!fs) {
@@ -327,40 +406,124 @@ quint64 FileSystemHandler::getFileOffset(int partitionIndex, const QString &file
         throw FileSystemException("Failed to open file: " + filePath);
     }
 
+
+
+
+
     quint64 offset = 0;
-    quint64 offset_start=0;
-    const int ntfs_entry_chunk_size=1024;
-    quint64 partition_offset=fs->offset;
 
+    qDebug() << " filePath..." << filePath  ;
 
-    if (file->meta) {
+    //MBR is always at offset 0;
+    if(filePath=="/$MBR"){
 
-
-            if (fs->ftype == TSK_FS_TYPE_NTFS) {
-                offset_start=getPartitionMftFileLocation(partitionIndex);
-
-
-                offset =  partition_offset + offset_start + (file->meta->addr * ntfs_entry_chunk_size);
-
-            }else{
-
-                offset = partition_offset +  (file->meta->addr * fs->block_size);
-            }
-
-            qDebug() << "partition_offset:"<< partition_offset;
-
-            qDebug()<< "offset_start" << offset_start;
-
-            qDebug()<< "file->meta->addr" << file->meta->addr;
-
-            qDebug()<< "offset" << offset;
-
-
+        return 0;
     }
 
+    quint64 partitionOffset = fs->offset;
+
+    if (file->meta) {
+        if (fs->ftype == TSK_FS_TYPE_NTFS) {
+            qDebug() << "NTFS Detected..."  ;
+
+            quint64 mftLocation = getPartitionMftFileLocation(partitionIndex);
+
+
+            offset = partitionOffset + mftLocation + (file->meta->addr * 1024);  // NTFS entry chunk size is 1024
+
+
+        } else if (fs->ftype == TSK_FS_TYPE_EXFAT || fs->ftype == TSK_FS_TYPE_FAT12 || fs->ftype == TSK_FS_TYPE_FAT16 || fs->ftype == TSK_FS_TYPE_FAT32) {
+            qDebug() << "FAT Detected..."  ;
+
+            FATFS_INFO *fatfs = (FATFS_INFO *) fs;
+
+            const quint64 FAT_DIRECTORY_ENTRY_SIZE=32;
+
+
+
+            if(filePath=="/$FAT1"){
+
+
+                qDebug() << "fs->firstfatsect:" << fatfs->firstfatsect;
+                qDebug() << "fs->sectperfat:" << fatfs->sectperfat;
+
+                const quint64 fatStart= fatfs->firstfatsect;
+
+                const quint64 FATAreaOffset=fatStart * fs->block_size;
+
+                offset = partitionOffset+ FATAreaOffset ;
+
+                qDebug() << "FAT offset:" << offset;
+
+                return offset;
+            }
+
+            if(filePath=="/$FAT2"){
+
+
+                qDebug() << "fs->firstfatsect:" << fatfs->firstfatsect;
+                qDebug() << "fs->sectperfat:" << fatfs->sectperfat;
+
+                const quint64 fatStart= fatfs->firstfatsect+ 1 * (fatfs->sectperfat);
+
+                const quint64 FATAreaOffset=fatStart * fs->block_size;
+
+                offset = partitionOffset+ FATAreaOffset ;
+
+                qDebug() << "FAT offset:" << offset;
+
+                return offset;
+            }
+
+
+
+
+
+
+
+            const quint64 dataStart= fatfs->firstdatasect;
+            const quint64 dataAreaOffset=dataStart * fs->block_size;
+
+             int offset_adjutment=3;
+
+            if(fs->ftype == TSK_FS_TYPE_EXFAT ){
+                 offset_adjutment= 1;
+             }
+
+
+            //The cluster starts with at 3 data units offset
+            offset = partitionOffset+ dataAreaOffset+ ((file->meta->addr -offset_adjutment ) * FAT_DIRECTORY_ENTRY_SIZE) ;
+
+            //qDebug() << "clusterStart:" <<clusterStart ;
+
+           /* qDebug() << "dataStart:" <<dataStart ;
+            qDebug() << "fs->block_size:" << fs->block_size;
+
+            qDebug() << "-------------------------------------------"  ;
+
+            qDebug() << "partitionOffset:" <<partitionOffset ;
+            qDebug() << "dataAreaOffset:" <<dataAreaOffset ;
+            qDebug() << "file->meta->addr:" <<file->meta->addr ;
+
+            qDebug() << "-------------------------------------------"  ; */
+
+
+
+        }
+        else {
+            //Ignore unsupported file systems
+            qDebug() << "Unsupported file system type: " + QString::number(fs->ftype);
+
+            tsk_fs_file_close(file);
+
+        }
+
+        qDebug() << "Partition offset:" << partitionOffset;
+        //qDebug() << "File meta address:" << file->meta->addr;
+        qDebug() << "Calculated offset:" << offset;
+    }
 
     tsk_fs_file_close(file);
-
     return offset;
 }
 

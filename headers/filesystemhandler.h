@@ -30,6 +30,9 @@ public:
     quint64 getFileOffset(int partitionIndex, const QString &filePath) ;
     quint64 getPartitionMftFileLocation(int partitionIndex);
 
+    QString fileSystemType;
+
+
 
 private:
     TSK_IMG_INFO *img;

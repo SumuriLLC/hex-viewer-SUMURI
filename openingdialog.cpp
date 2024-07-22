@@ -199,10 +199,12 @@ bool OpeningDialog::onOkButtonClicked()
     usertagsHandler->createUserTagsTable();
     usertagsHandler->createTemplateTagsTable();
 
+
     //Create tags table
 
     MainWindow *w = new MainWindow;
     //Add recent folder
+    tagsHandler->createRecentFoldersTable();
     tagsHandler->addRecentFolder(fullPath);
     w->setTagsHandler(tagsHandler);
     w->setUserTagsHandler(usertagsHandler);

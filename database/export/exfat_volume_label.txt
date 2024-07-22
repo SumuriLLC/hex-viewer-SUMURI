@@ -1,4 +1,4 @@
-0 (0x0),0 (0x0),Entry Type,#ffdd00
+0 (0x0),0 (0x0),Entry Type,#ffdd00,string
 1 (0x1),1 (0x1),Character Count,#f24689
-2 (0x2),23 (0x17),Volume Label,#989898
+2 (0x2),23 (0x17),Volume Label,#989898,string
 24 (0x18),31 (0x1F),Reserved,#111111

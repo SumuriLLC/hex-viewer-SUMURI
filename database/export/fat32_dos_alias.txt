@@ -1,13 +1,13 @@
-0 (0x0),7 (0x7),DOS Alias,#ca9cb5
-8 (0x8),10 (0xA),File Extension,#bb1067
+0 (0x0),7 (0x7),DOS Alias,#ca9cb5,string
+8 (0x8),10 (0xA),File Extension,#bb1067,string
 11 (0xB),11 (0xB),Attribute,#017667
 12 (0xC),12 (0xC),Reserved,#0bb000
-13 (0xD),13 (0xD),Millisecond,#c07cff
-14 (0xE),15 (0xF),File Creation Time,#0070ff
-16 (0x10),17 (0x11),File Creation Date,#510667
-18 (0x12),19 (0x13),File Access Date,#aa09f7
+13 (0xD),13 (0xD),Millisecond,#c07cff,time
+14 (0xE),15 (0xF),File Creation Time,#0070ff,time
+16 (0x10),17 (0x11),File Creation Date,#510667,date
+18 (0x12),19 (0x13),File Access Date,#aa09f7,date
 20 (0x14),21 (0x15),High Word,#22a399
-22 (0x16),23 (0x17),Write Time,#111111
-24 (0x18),25 (0x19),Write Date,#ffcc77
+22 (0x16),23 (0x17),Write Time,#111111,time
+24 (0x18),25 (0x19),Write Date,#ffcc77,date
 26 (0x1A),27 (0x1B),Low Word,#c0c000
 28 (0x1C),31 (0x1F),File Size,#f0cfff

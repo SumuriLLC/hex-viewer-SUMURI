@@ -38,6 +38,7 @@ public:
        QList<Tag> getUserTagsFromUserDB(int tabID) const;
        QList<Tag> getTemplateTagsFromUserDB(int tabID) const;
 
+       void createRecentFoldersTable();
        void addRecentFolder(const QString &path);
        QList<QString> getRecentFolders() const;
 

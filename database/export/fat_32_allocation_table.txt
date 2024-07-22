@@ -1,2 +1,2 @@
-0 (0x0),3 (0x3),Media Descriptor,#142249
-4 (0x4),7 (0x7),FAT Type,#634a71
+0 (0x0),3 (0x3),Media Descriptor,#142249,string
+4 (0x4),7 (0x7),FAT Type,#634a71,string

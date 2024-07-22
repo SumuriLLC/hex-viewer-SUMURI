@@ -1,15 +1,23 @@
 import sqlite3
 import os
 
-# Create a connection to the SQLite database
-conn = sqlite3.connect('tags_database.db')
+# Database file name
+database_file = 'tags_database.db'
+
+# Delete the existing database file if it exists
+if os.path.exists(database_file):
+    os.remove(database_file)
+    print(f"Deleted existing database file: {database_file}")
+
+# Create a connection to the new SQLite database
+conn = sqlite3.connect(database_file)
 cursor = conn.cursor()
 
-print("Connected to the database.")
+print("Created a new database and connected to it.")
 
-# Create the "tags" table if it doesn't exist
+# Create the "tags" table
 cursor.execute('''
-CREATE TABLE IF NOT EXISTS tags (
+CREATE TABLE tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     offset INTEGER,
     length INTEGER,
@@ -19,12 +27,7 @@ CREATE TABLE IF NOT EXISTS tags (
     datatype TEXT
 )
 ''')
-print("Checked/created the 'tags' table.")
-
-# Clear the tags table before inserting new data
-cursor.execute('DELETE FROM tags')
-conn.commit()
-print("Cleared the 'tags' table.")
+print("Created the 'tags' table.")
 
 # Function to insert data into the database
 def insert_data(offset, length, description, color, category, datatype='number'):
@@ -41,12 +44,13 @@ def process_file(filepath, category):
     with open(filepath, 'r') as file:
         for line in file:
             parts = line.strip().split(',')
-            if len(parts) == 4:
-                start_offset_str, end_offset_str, description, color = parts
+            if len(parts) >= 4:
+                start_offset_str, end_offset_str, description, color = parts[:4]
+                datatype = parts[4] if len(parts) == 5 else 'number'
                 start_offset = int(start_offset_str.split(' ')[0])
                 end_offset = int(end_offset_str.split(' ')[0])
                 length = end_offset - start_offset + 1
-                insert_data(start_offset, length, description, color, category)
+                insert_data(start_offset, length, description, color, category, datatype)
             else:
                 print(f"Skipping invalid line: {line}")
 

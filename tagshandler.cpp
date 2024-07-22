@@ -417,6 +417,20 @@ QList<Tag> TagsHandler::getTemplateTagsFromUserDB(int tabID) const
     return tags;
 }
 
+void TagsHandler::createRecentFoldersTable()
+{
+    ensureDatabaseOpen();
+
+    QSqlQuery query(db);
+    if (!query.exec("CREATE TABLE IF NOT EXISTS RecentFolders ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "path TEXT)")) {
+        qDebug() << "Error: unable to create RecentFolders table" << query.lastError().text();
+    } else {
+        qDebug() << "RecentFolders table created or verified successfully.";
+    }
+}
+
 void TagsHandler::addRecentFolder(const QString &path)
 {
     ensureDatabaseOpen();

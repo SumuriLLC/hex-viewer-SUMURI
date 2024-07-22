@@ -429,7 +429,7 @@ void HexViewerForm::onTableRowDoubleClicked(const QModelIndex &index)
     loadingDialog->show();
     qApp->processEvents();
 
-    qDebug() << "Double-clicked on index" << index;
+    //qDebug() << "Double-clicked on index" << index;
     if (!index.isValid())
         return;
 
@@ -458,7 +458,7 @@ void HexViewerForm::onTableRowDoubleClicked(const QModelIndex &index)
     QString filePath = model->data(model->index(index.row(), 1), Qt::DisplayRole).toString();
     QString fileType = model->data(model->index(index.row(), 8), Qt::DisplayRole).toString();
 
-    qDebug() << "filePath:" << filePath << "fileType:" << fileType <<model->data(model->index(index.row(), Qt::DisplayRole));
+    //qDebug() << "filePath:" << filePath << "fileType:" << fileType <<model->data(model->index(index.row(), Qt::DisplayRole));
     //    QString fileType = model->data(model->index(contextMenuIndex.row(), Qt::UserRole)).toString();
 
 
@@ -488,10 +488,13 @@ void HexViewerForm::onTableRowDoubleClicked(const QModelIndex &index)
             currentDir = filePath;
             qDebug() << "using filepath :" << currentDir;
         }
-        qDebug() << "Listing for dir :" << currentDir;
+       // qDebug() << "Listing for dir :" << currentDir;
 
 
         QList<QStringList> newFileList = fsHandler->listFilesInDirectory(partitionIndex, currentDir);
+
+       // qDebug() << "Listing newFileList" << newFileList;
+
 
         if (!newFileList.isEmpty()) {
             model->setFileData(newFileList);
@@ -598,7 +601,17 @@ void HexViewerForm::onTableRowRightClicked(const QPoint &pos)
 
 
     QMenu contextMenu;
-    QAction *goToMFTAction = contextMenu.addAction("Goto $MFT entry");
+    QAction *goToMFTAction ;
+
+    if(fsHandler->fileSystemType=="NTFS"){
+         goToMFTAction = contextMenu.addAction("Go to $MFT entry");
+
+    }
+
+    if(fsHandler->fileSystemType=="FAT"){
+        goToMFTAction = contextMenu.addAction("Go to Directory Entry");
+
+    }
     QAction *exportAction = contextMenu.addAction("Export");
     QAction *openExternalAction = contextMenu.addAction("Open File as External Viewer");
     // QAction *exportZipAction = contextMenu.addAction("Export as zip");

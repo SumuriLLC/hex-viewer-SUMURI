@@ -1,4 +1,4 @@
-0 (0x0),3 (0x3),Signature,#ffcc77
+0 (0x0),3 (0x3),Signature,#ffcc77,string
 4 (0x4),5 (0x5),Offset to fix up array,#111111
 6 (0x6),7 (0x7),Entried in fix up array,#22a399
 8 (0x8),15 (0xF),$LogFile Sequence Number,#aa09f7

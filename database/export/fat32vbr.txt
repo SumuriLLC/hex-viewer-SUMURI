@@ -1,13 +1,13 @@
-0 (0x0),2 (0x2),JMP Instruction,#01ff67
-3 (0x3),10 (0xA),OEM ID,#bb1067
+0 (0x0),2 (0x2),JMP Instruction,#01ff67,string
+3 (0x3),10 (0xA),OEM ID,#bb1067,string
 11 (0xB),12 (0xC),Bytes Per Sector,#017667
 13 (0xD),13 (0xD),Sectors Per Cluster,#0bb000
 14 (0xE),15 (0xF),Reserved Sectors,#c07cff
-14 (0xE),15 (0xF),File Creation Time,#0070ff
+14 (0xE),15 (0xF),File Creation Time,#0070ff,time
 16 (0x10),16 (0x10),FAT Count,#510667
 17 (0x11),18 (0x12),Root Entries,#aa09f7
 19 (0x13),20 (0x14),Total Sectors,#22a399
-21 (0x15),21 (0x15),Media Descriptor,#111111
+21 (0x15),21 (0x15),Media Descriptor,#111111,string
 22 (0x16),23 (0x17),Sectors Per FAT,#ffcc77
 24 (0x18),25 (0x19),Sectors Per Track,#c0c000
 26 (0x1A),27 (0x1B),Number of Heads,#f0cfff
@@ -15,14 +15,14 @@
 32 (0x20),35 (0x23),Total Sectors,#01ff67
 36 (0x24),39 (0x27),Sectors Per FAT,#ffcc77
 40 (0x28),41 (0x29),Extended Flags,#017667
-42 (0x2A),43 (0x2B),Fat Version,#c0c000
+42 (0x2A),43 (0x2B),Fat Version,#c0c000,string
 44 (0x2C),47 (0x2F),Root Directory Cluster,#ffcc77
 48 (0x30),49 (0x31),FS Info Sector,#aa09f7
 50 (0x32),51 (0x33),Backup Boot Sector,#0070ff
 52 (0x34),63 (0x3F),Reserved,#c07cff
-64 (0x40),64 (0x40),BIOS Drive Number,#c0c000
+64 (0x40),64 (0x40),BIOS Drive Number,#c0c000,string
 65 (0x41),65 (0x41),Reserved,#c07cff
-66 (0x42),66 (0x42),Extended Boot Signature,#991111
-67 (0x43),70 (0x46),Volume Serial Number,#586600
-71 (0x47),81 (0x51),Volume Label,#519f67
-82 (0x52),89 (0x59),File System Type,#500f67
+66 (0x42),66 (0x42),Extended Boot Signature,#991111,string
+67 (0x43),70 (0x46),Volume Serial Number,#586600,string
+71 (0x47),81 (0x51),Volume Label,#519f67,string
+82 (0x52),89 (0x59),File System Type,#500f67,string

@@ -1,4 +1,4 @@
-0 (0x0),7 (0x7),Signature,#ffff00
+0 (0x0),7 (0x7),Signature,#ffff00,string
 8 (0x8),11 (0xB),Revision Number,#017667
 12 (0xC),15 (0xF),Header Size,#0000ff
 16 (0x10),19 (0x13),CRC32 Checksum,#bb1067
@@ -6,7 +6,7 @@
 32 (0x20),39 (0x27),Backup LBA,#586600
 40 (0x28),47 (0x2F),LBA of Start of Partition Area,#00ff00
 48 (0x30),55 (0x37),LBA of End of Partition Area,#017667
-56 (0x38),71 (0x47),Disk GUID,#ffff00
+56 (0x38),71 (0x47),Disk GUID,#ffff00,string
 72 (0x48),79 (0x4F),LBA of Start of Partition Tables,#c07cff
 80 (0x50),83 (0x53),Partition Entries Count,#0bb000
 84 (0x54),87 (0x57),Partition Entry Size,#500f67

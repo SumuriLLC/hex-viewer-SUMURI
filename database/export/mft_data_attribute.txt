@@ -1,7 +1,7 @@
 0 (0x0),3 (0x3),Data Attribute Identifier,#01ff67
 4 (0x4),7 (0x7),Data Attribute Length,#bb1067
 8 (0x8),8 (0x8),Data Content Flag,#017667
-9 (0x9),9 (0x9),Data Length of stream name,#0bb000
+9 (0x9),9 (0x9),Data Length of stream name,#0bb000,string
 10 (0xA),11 (0xB),Data Offset to the stream name,#c07cff
 16 (0x10),23 (0x17),Data Starting VCN of the RunList,#0070ff
 24 (0x18),31 (0x1F),Data End VCN of the RunList,#510667

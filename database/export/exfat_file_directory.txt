@@ -1,11 +1,11 @@
-0 (0x0),0 (0x0),Entry Type,#01ff67
+0 (0x0),0 (0x0),Entry Type,#01ff67,string
 1 (0x1),1 (0x1),Secondary Count,#bb1067
 2 (0x2),3 (0x3),Set Checksum,#017667
 4 (0x4),5 (0x5),File Attributes,#0bb000
 6 (0x6),7 (0x7),Reserved,#c07cff
-8 (0x8),11 (0xB),Create Timestamp,#0070ff
-12 (0xC),15 (0xF),Modified Timestamp,#510667
-16 (0x10),19 (0x13),Last Accessed Timestamp,#aa09f7
+8 (0x8),11 (0xB),Create Timestamp,#0070ff,date
+12 (0xC),15 (0xF),Modified Timestamp,#510667,date
+16 (0x10),19 (0x13),Last Accessed Timestamp,#,date
 20 (0x14),20 (0x14),Create 10ms Increment,#22a399
 21 (0x15),21 (0x15),Modified 10ms Increment,#111111
 22 (0x16),22 (0x16),Create UTC Diferential,#ffcc77
