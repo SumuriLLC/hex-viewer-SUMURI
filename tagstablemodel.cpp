@@ -1,5 +1,6 @@
 #include "headers/tagstablemodel.h"
 #include <QColor>
+#include <algorithm>
 
 TagsTableModel::TagsTableModel(QObject *parent)
     : QAbstractTableModel(parent), m_filterType("")
@@ -64,7 +65,6 @@ QVariant TagsTableModel::data(const QModelIndex &index, int role) const
     } else if (role == Qt::BackgroundRole && index.column() == 3) {
         return QColor(tag.color);
     }
-
     return QVariant();
 }
 
@@ -80,4 +80,43 @@ QVariant TagsTableModel::headerData(int section, Qt::Orientation orientation, in
     case 3: return "Color";
     default: return QVariant();
     }
+}
+
+void TagsTableModel::sort(int column, Qt::SortOrder order)
+{
+    m_sortColumn = column;
+    m_sortOrder = order;
+    std::sort(m_filteredTags.begin(), m_filteredTags.end(),
+              [this](const Tag &left, const Tag &right) {
+                  if (m_sortColumn == 0) // Offset
+                      return m_sortOrder == Qt::AscendingOrder ? left.offset < right.offset : left.offset > right.offset;
+                  else if (m_sortColumn == 1) // Length
+                      return m_sortOrder == Qt::AscendingOrder ? left.length < right.length : left.length > right.length;
+                  else if (m_sortColumn == 2) // Description
+                      return m_sortOrder == Qt::AscendingOrder ? left.description < right.description : left.description > right.description;
+                  return false;
+              });
+    emit dataChanged(index(0, 0), index(rowCount() - 1, columnCount() - 1));
+}
+
+void TagsTableModel::setTags(const QVector<Tag> &tags, int sortColumn, Qt::SortOrder order)
+{
+    beginResetModel();
+    m_tags = tags;
+    m_sortColumn = sortColumn;
+    m_sortOrder = order;
+    applyFilter();
+    if (m_sortColumn >= 0) {
+        std::sort(m_filteredTags.begin(), m_filteredTags.end(),
+                  [this](const Tag &left, const Tag &right) {
+                      if (m_sortColumn == 0) // Offset
+                          return m_sortOrder == Qt::AscendingOrder ? left.offset < right.offset : left.offset > right.offset;
+                      else if (m_sortColumn == 1) // Length
+                          return m_sortOrder == Qt::AscendingOrder ? left.length < right.length : left.length > right.length;
+                      else if (m_sortColumn == 2) // Description
+                          return m_sortOrder == Qt::AscendingOrder ? left.description < right.description : left.description > right.description;
+                      return false;
+                  });
+    }
+    endResetModel();
 }

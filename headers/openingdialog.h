@@ -3,6 +3,10 @@
 
 #include <QDialog>
 #include <QAbstractButton>
+#include <QDialog>
+#include <QVBoxLayout>
+#include <QTextEdit>
+#include <QPushButton>
 #include "loadingdialog.h"
 #include "tagshandler.h"
 
@@ -27,6 +31,8 @@ private slots:
     void onLoadCaseClicked();
     void onOtherCaseClicked();
     void onRecentFolderClicked();
+    void showEulaDialog();
+
 
 
 private:

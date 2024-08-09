@@ -16,9 +16,12 @@ public:
     ~GoToOffsetDialog();
     quint64 offset() const;
 
+private slots:
+    void onJumpButtonClicked();
 
 private:
     Ui::GoToOffsetDialog *ui;
+    void populatePartitionsComboBox();
 };
 
 #endif // GOTOOFFSETDIALOG_H

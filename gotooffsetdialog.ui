@@ -17,13 +17,13 @@
    <property name="geometry">
     <rect>
      <x>0</x>
-     <y>0</y>
-     <width>551</width>
-     <height>181</height>
+     <y>10</y>
+     <width>491</width>
+     <height>171</height>
     </rect>
    </property>
    <property name="currentIndex">
-    <number>0</number>
+    <number>1</number>
    </property>
    <widget class="QWidget" name="tab">
     <attribute name="title">
@@ -166,6 +166,34 @@
      </layout>
     </widget>
    </widget>
+   <widget class="QWidget" name="clusterJumpTab">
+    <attribute name="title">
+     <string>Cluster Jump</string>
+    </attribute>
+    <widget class="QComboBox" name="partitionsComboBox">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>30</y>
+       <width>82</width>
+       <height>21</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="clusterNumberlineEdit">
+     <property name="geometry">
+      <rect>
+       <x>130</x>
+       <y>30</y>
+       <width>291</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="placeholderText">
+      <string>enter cluster number</string>
+     </property>
+    </widget>
+   </widget>
   </widget>
   <widget class="QPushButton" name="jumpButton">
    <property name="geometry">
@@ -182,22 +210,5 @@
   </widget>
  </widget>
  <resources/>
- <connections>
-  <connection>
-   <sender>jumpButton</sender>
-   <signal>clicked()</signal>
-   <receiver>GoToOffsetDialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>201</x>
-     <y>184</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>225</x>
-     <y>116</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>

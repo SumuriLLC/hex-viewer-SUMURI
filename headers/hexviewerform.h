@@ -44,13 +44,13 @@ public:
     QByteArray getSelectedData() const;
     void setTagsHandler(TagsHandler *tagsHandler);
     void setUserTagsHandler(TagsHandler *userTagsHandler);
+    FileSystemHandler *fsHandler;
 
-
+    void jumpToOffset(quint64 offset);
 private slots:
     void onShowTablesClicked();
-
-    void onBytesPerLineChanged(int index);
     void onGoToOffsetClicked();
+    void onBytesPerLineChanged(int index);
 
     void on_readAsImageButton_clicked();
     void onFileSystemSearchButtonClicked();
@@ -69,6 +69,9 @@ private slots:
     void onOpenSearchForm();
     void onSearchButtonClicked();
     void onSearchNextButtonClicked();
+    void onSaveButtonClicked();
+
+
 
 private:
 
@@ -76,7 +79,6 @@ private:
     MarkersTableModel *markersTableModel;
     FileSystemTableModel *fileSystemTableModel;
 
-    FileSystemHandler *fsHandler;
     void onTableRowDoubleClicked(const QModelIndex &index);
      QMap<int, QString> currentDirMap;
      QMap<int, int> tabPartitionMap;

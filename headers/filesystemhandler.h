@@ -32,7 +32,8 @@ public:
 
     QString fileSystemType;
 
-
+    QList<QStringList> getAvailablePartitions() const;
+    quint64 calculateClusterOffset(int partitionIndex, qint64 clusterNumber);
 
 private:
     TSK_IMG_INFO *img;

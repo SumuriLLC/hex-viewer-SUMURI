@@ -292,35 +292,33 @@ void HexEditor::updateSelection(const QPoint &pos, bool reset)
         selection.second = offset;
     }
 
-    if (selection.first > selection.second) {
-        std::swap(selection.first, selection.second);
-    }
-
     // Update the set of selected offsets
     selectedOffsets.clear();
-    for (quint64 i = selection.first + visibleStart; i <= selection.second + visibleStart; ++i) {
+    quint64 selectionStart = qMin(selection.first, selection.second) + visibleStart;
+    quint64 selectionEnd = qMax(selection.first, selection.second) + visibleStart;
+    for (quint64 i = selectionStart; i <= selectionEnd; ++i) {
         selectedOffsets.insert(i);
     }
 
     cursorPosition = selection.second + visibleStart; // Update cursor position with respect to the file
-    QByteArray selectedData = data_visible.mid(selection.first, selection.second - selection.first + 1);
-    emit selectionChanged(selectedData, selection.first + visibleStart, selection.second + visibleStart);
-
+    QByteArray selectedData = data_visible.mid(qMin(selection.first, selection.second),
+                                               qAbs(selection.second - selection.first) + 1);
+    emit selectionChanged(selectedData, selectionStart, selectionEnd);
 
     QString tagName = "";
     quint64 tagLength = 0;
-    QString tagColor="";
+    QString tagColor = "";
 
     for (const Tag &tag : tags) {
         if (cursorPosition >= tag.offset && cursorPosition < tag.offset + tag.length) {
             tagName = tag.description;
             tagLength = tag.length;
-            tagColor=tag.color;
+            tagColor = tag.color;
             break;
         }
     }
 
-    emit tagNameAndLength(tagName, tagLength,tagColor);
+    emit tagNameAndLength(tagName, tagLength, tagColor);
     viewport()->update();
 }
 
@@ -665,7 +663,7 @@ void HexEditor::contextMenuEvent(QContextMenuEvent *event)
 
             QAction *showAsNTFSMFTaction = new QAction("NTFS MFT Entry", this);
             showAsNTFSMenu->addAction(showAsNTFSMFTaction);
-            connect(showAsNTFSMFTaction, &QAction::triggered, this, [this]() { onShowTags("NTFS MFT Entry"); });
+            connect(showAsNTFSMFTaction, &QAction::triggered, this, [this]() { onShowTags("File Record Header"); });
 
 
             QAction *showAsNTFSRunlistaction = new QAction("NTFS Runlist Entry", this);
@@ -851,6 +849,28 @@ void HexEditor::onEndBlock()
 
 void HexEditor::onShowTags(const QString &tagCategory)
 {
+
+
+
+    if(tagCategory=="GPT"){
+
+        QMap<QString, QList<Tag>> tagsByGroup;
+        QList<Tag> headertags = tagsHandler->getTagsByCategory("GPT Header");
+
+        if(!headertags.isEmpty()){
+            tagsByGroup.insert("GPT Header", headertags);
+        }
+
+        QList<Tag> entrytags= tagsHandler->getTagsByCategory("GPT Entry");
+
+        if(!entrytags.isEmpty()){
+            tagsByGroup.insert("GPT Entry", entrytags);
+        }
+
+        TagDialogModel dialog(tagCategory, tags, *device,cursorPosition, this,tagsByGroup);
+        dialog.exec();
+    }
+
     QList<Tag> tags = tagsHandler->getTagsByCategory(tagCategory);
 
     if (tags.isEmpty()) {
@@ -895,8 +915,8 @@ void HexEditor::onTagSelectedBytes()
         return;
     }
 
-    quint64 startAddr = selection.first + visibleStart;
-    quint64 endAddr = selection.second + visibleStart;
+    quint64 startAddr = qMin(selection.first, selection.second) + visibleStart;
+    quint64 endAddr = qMax(selection.first, selection.second) + visibleStart;
 
     NewTagDialog dialog(this);
     dialog.setStartAddress(startAddr);
@@ -1016,26 +1036,56 @@ void HexEditor::clearTags(){
 
 }
 
-
-void HexEditor::removeTag(quint64 offset, int index)
+void HexEditor::removeTag(quint64 offset, int index, const QString &tagType)
 {
+    Q_UNUSED(index);
 
-    //Ignore index
-    auto it = std::remove_if(tags.begin(), tags.end(), [offset](const Tag &tag) {
-        return tag.offset == offset;
-    });
-
-    if (it != tags.end()) {
-        tags.erase(it, tags.end());
-
-        emit tagsUpdated(tags);
-        viewport()->update();
-
-    } else {
-        qDebug() << "No tag found at offset" << offset;
+    // Find all tags that start at this offset and match the tagType
+    QVector<Tag> tagsToRemove;
+    for (const Tag &tag : tags) {
+        if (tag.offset == offset && tag.type == tagType) {
+            tagsToRemove.append(tag);
+        }
     }
-}
 
+    if (tagsToRemove.isEmpty()) {
+        QMessageBox::information(this, tr("No Tag Found"),
+                                 tr("No %1 tag found at offset %2.").arg(tagType).arg(offset));
+        return;
+    }
+
+    // If there's more than one tag at this offset, ask the user which one(s) to delete
+    if (tagsToRemove.size() > 1) {
+        QStringList items;
+        for (const Tag &tag : tagsToRemove) {
+            items << QString("%1 (Length: %2, Color: %3)").arg(tag.description).arg(tag.length).arg(tag.color);
+        }
+
+        bool ok;
+        QString item = QInputDialog::getItem(this, tr("Select Tag to Delete"),
+                                             tr("Multiple %1 tags found at this offset. Select which to delete:").arg(tagType),
+                                             items, 0, false, &ok);
+        if (!ok || item.isEmpty()) {
+            QMessageBox::information(this, tr("No Tag Selected"),
+                                     tr("No tag was selected for deletion."));
+            return;
+        }
+
+        int selectedIndex = items.indexOf(item);
+        tagsToRemove = {tagsToRemove[selectedIndex]}; // Keep only the selected tag
+    }
+
+    // Remove the selected tag(s)
+    for (const Tag &tagToRemove : tagsToRemove) {
+        tags.removeOne(tagToRemove);
+    }
+
+    emit tagsUpdated(tags);
+    viewport()->update();
+
+    QMessageBox::information(this, tr("Tag Deleted"),
+                             tr("%n %1 tag(s) deleted successfully.", "", tagsToRemove.size()).arg(tagType));
+}
 void HexEditor::importTags(const QString &tagType)
 {
     QString fileName = QFileDialog::getOpenFileName(this, tr("Open Tags"), "", tr("Text Files (*.txt);;All Files (*)"));
@@ -1043,35 +1093,59 @@ void HexEditor::importTags(const QString &tagType)
 
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qDebug() << "Could not open file for reading:" << file.errorString();
+        QMessageBox::critical(this, tr("Error"), tr("Could not open file for reading:\n%1").arg(file.errorString()));
         return;
     }
 
-    //clearTags(); // Clear existing tags
+    int importedTagsCount = 0;
+    int failedTagsCount = 0;
 
     QTextStream in(&file);
     while (!in.atEnd()) {
         QString line = in.readLine();
         QStringList parts = line.split(",");
-        if (parts.size() != 4) continue;
+        if (parts.size() != 4) {
+            failedTagsCount++;
+            continue;
+        }
 
         bool ok;
         quint64 offset = parts[0].split(" ").first().toULongLong(&ok);
-        if (!ok) continue;
+        if (!ok) {
+            failedTagsCount++;
+            continue;
+        }
         quint64 endOffset = parts[1].split(" ").first().toULongLong(&ok);
-        if (!ok) continue;
+        if (!ok) {
+            failedTagsCount++;
+            continue;
+        }
 
         quint64 length = endOffset - offset + 1;
         QString description = parts[2];
         QString color = parts[3];
 
         addTag(offset, length, description, QColor(color), tagType);
+        importedTagsCount++;
     }
 
     file.close();
     viewport()->update(); // Refresh the viewport to apply the new tags
-}
 
+    QString message;
+    if (importedTagsCount > 0) {
+        message = tr("Successfully imported %1 tags.").arg(importedTagsCount);
+        if (failedTagsCount > 0) {
+            message += tr("\n%1 tags failed to import.").arg(failedTagsCount);
+        }
+        QMessageBox::information(this, tr("Import Successful"), message);
+    } else if (failedTagsCount > 0) {
+        message = tr("Failed to import any tags.\n%1 tags were invalid or could not be processed.").arg(failedTagsCount);
+        QMessageBox::warning(this, tr("Import Failed"), message);
+    } else {
+        QMessageBox::information(this, tr("No Tags Imported"), tr("The file did not contain any valid tags to import."));
+    }
+}
 void HexEditor::exportTags(const QString &type)
 {
     QString fileName = QFileDialog::getSaveFileName(this, tr("Save Tags"), "", tr("Text Files (*.txt);;All Files (*)"));
@@ -1079,20 +1153,34 @@ void HexEditor::exportTags(const QString &type)
 
     QFile file(fileName);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qDebug() << "Could not open file for writing:" << file.errorString();
+        QMessageBox::critical(this, tr("Export Failed"),
+                              tr("Could not open file for writing:\n%1").arg(file.errorString()));
         return;
     }
 
     QTextStream out(&file);
+    int exportedTagsCount = 0;
+
     for (const Tag &tag : tags) {
         if (tag.type == type) {
             out << tag.offset << " (0x" << QString::number(tag.offset, 16).toUpper() << "),"
                 << tag.offset + tag.length - 1 << " (0x" << QString::number(tag.offset + tag.length - 1, 16).toUpper() << "),"
                 << tag.description << "," << tag.color << "\n";
+            exportedTagsCount++;
         }
     }
 
     file.close();
+
+    if (exportedTagsCount > 0) {
+        QMessageBox::information(this, tr("Export Successful"),
+                                 tr("Successfully exported %1 tags to:\n%2")
+                                     .arg(exportedTagsCount)
+                                     .arg(QDir::toNativeSeparators(fileName)));
+    } else {
+        QMessageBox::warning(this, tr("No Tags Exported"),
+                             tr("No tags of type '%1' were found to export.").arg(type));
+    }
 }
 
 void HexEditor::exportTagDataByOffset(quint64 offset, const QString &fileName)
@@ -1383,27 +1471,28 @@ void  HexEditor::clearSearchResults(){
 
 }
 
-void HexEditor::syncTagsOnClose()
+void HexEditor::syncTagsOnClose(std::function<void(bool)> callback)
 {
-
-    loadingDialog->setMessage("Saving data.please wait...");
-    loadingDialog->show();
-    qApp->processEvents();
-
-
     if (userTagsHandler) {
         QFuture<void> future = QtConcurrent::run([this]() {
             userTagsHandler->syncTags(tags, currentTabIndex);
         });
-        QFutureWatcher<void> *watcher = new QFutureWatcher<void>();
-        connect(watcher, &QFutureWatcher<void>::finished, [watcher]() {
-            qDebug() << "Tags synced successfully on close.";
-            //loadingDialog->hide();
 
+        QFutureWatcher<void> *watcher = new QFutureWatcher<void>();
+        connect(watcher, &QFutureWatcher<void>::finished, [watcher, callback]() {
+            qDebug() << "Tags synced successfully on close.";
+            callback(true);
             watcher->deleteLater();
         });
+
+        connect(watcher, &QFutureWatcher<void>::canceled, [watcher, callback]() {
+            qDebug() << "Tag syncing was canceled.";
+            callback(false);
+            watcher->deleteLater();
+        });
+
         watcher->setFuture(future);
-        watcher->waitForFinished();
+    } else {
+        callback(false);
     }
 }
-

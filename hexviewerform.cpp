@@ -20,9 +20,9 @@
 
 HexViewerForm::HexViewerForm(QWidget *parent)
     : QWidget(parent)
+    , fsHandler(new FileSystemHandler(this))
     , ui(new Ui::HexViewerForm)
     , markersTableModel(new MarkersTableModel(this))
-    , fsHandler(new FileSystemHandler(this))
     ,loadingDialog(new LoadingDialog(this))
     , tagsTableModel(new TagsTableModel(this))
     ,templateTagsTableModel(new TagsTableModel(this))
@@ -67,6 +67,8 @@ HexViewerForm::HexViewerForm(QWidget *parent)
 
 
     templateTagsTableModel->setFilterType("template");
+
+    ui->TemplateTagstableView->setSortingEnabled(true);
     ui->TemplateTagstableView->setModel(templateTagsTableModel);
     ui->TemplateTagstableView->setSelectionBehavior(QAbstractItemView::SelectRows); // Ensure rows are selected
     connect(ui->TemplateTagstableView, &QTableView::doubleClicked, this, &HexViewerForm::onTemplateTagTableDoubleClicked);
@@ -74,6 +76,8 @@ HexViewerForm::HexViewerForm(QWidget *parent)
 
     tagsTableModel->setFilterType("user");
     ui->tagsTableView->setModel(tagsTableModel);
+    ui->tagsTableView->setSortingEnabled(true);
+
     ui->tagsTableView->setSelectionBehavior(QAbstractItemView::SelectRows); // Ensure rows are selected
     connect(ui->tagsTableView, &QTableView::doubleClicked, this, &HexViewerForm::onTagTableDoubleClicked);
 
@@ -96,6 +100,9 @@ HexViewerForm::HexViewerForm(QWidget *parent)
     connect(searchForm->getSearchButton(), &QPushButton::clicked, this, &HexViewerForm::onSearchButtonClicked);
 
     connect(ui->searchButton, &QPushButton::clicked, this, &HexViewerForm::onOpenSearchForm);
+
+    connect(ui->saveButton, &QPushButton::clicked, this, &HexViewerForm::onSaveButtonClicked);
+
 
 
 }
@@ -158,9 +165,13 @@ void HexViewerForm::onSearchNextButtonClicked()
 
 void HexViewerForm::updateTagsTable(const QVector<Tag> &tags)
 {
-    //qDebug()<< "First tag" << tags.first().type;
-    tagsTableModel->setTags(tags);
-    templateTagsTableModel->setTags(tags);
+    int userSortColumn = ui->tagsTableView->horizontalHeader()->sortIndicatorSection();
+    Qt::SortOrder userSortOrder = ui->tagsTableView->horizontalHeader()->sortIndicatorOrder();
+    tagsTableModel->setTags(tags, userSortColumn, userSortOrder);
+
+    int templateSortColumn = ui->TemplateTagstableView->horizontalHeader()->sortIndicatorSection();
+    Qt::SortOrder templateSortOrder = ui->TemplateTagstableView->horizontalHeader()->sortIndicatorOrder();
+    templateTagsTableModel->setTags(tags, templateSortColumn, templateSortOrder);
 }
 
 void HexViewerForm::onTagTableDoubleClicked(const QModelIndex &index)
@@ -191,12 +202,29 @@ void HexViewerForm::onTemplateTagTableDoubleClicked(const QModelIndex &index)
     ui->hexEditorWidget->ensureCursorVisible();
 }
 
+void HexViewerForm::removeSelectedTag()
+{
+    QModelIndex selectedIndex = ui->tagsTableView->currentIndex();
+    if (!selectedIndex.isValid()) {
+        QMessageBox::information(this, tr("No Selection"),
+                                 tr("No user tag selected. Please select a tag to remove."));
+        return;
+    }
+
+    quint64 offset = ui->tagsTableView->model()->data(ui->tagsTableView->model()->index(selectedIndex.row(), 0)).toULongLong();
+    ui->hexEditorWidget->removeTag(offset, selectedIndex.row(), "user");
+}
+
 void HexViewerForm::removeSelectedTemplateTag()
 {
     QItemSelectionModel *selectionModel = ui->TemplateTagstableView->selectionModel();
     QModelIndexList selectedIndexes = selectionModel->selectedRows();
 
-    if (selectedIndexes.isEmpty()) return;
+    if (selectedIndexes.isEmpty()) {
+        QMessageBox::information(this, tr("No Selection"),
+                                 tr("No template tag selected. Please select a template tag to remove."));
+        return;
+    }
 
     // Sort the selected indexes in descending order
     std::sort(selectedIndexes.begin(), selectedIndexes.end(), [](const QModelIndex &a, const QModelIndex &b) {
@@ -207,59 +235,63 @@ void HexViewerForm::removeSelectedTemplateTag()
         if (!selectedIndex.isValid()) continue;
 
         quint64 offset = ui->TemplateTagstableView->model()->data(ui->TemplateTagstableView->model()->index(selectedIndex.row(), 0)).toULongLong();
-        ui->hexEditorWidget->removeTag(offset, selectedIndex.row());
+        ui->hexEditorWidget->removeTag(offset, selectedIndex.row(), "template");
     }
-}
-
-
-
-void HexViewerForm::removeSelectedTag()
-{
-    QModelIndex selectedIndex = ui->tagsTableView->currentIndex();
-    if (!selectedIndex.isValid()) return;
-
-    quint64 offset = ui->tagsTableView->model()->data(ui->tagsTableView->model()->index(selectedIndex.row(), 0)).toULongLong();
-    ui->hexEditorWidget->removeTag(offset, selectedIndex.row());
 }
 
 void HexViewerForm::onExportSelectedTagData()
 {
-    // Get the selected tag's offset from the table view
-    QModelIndexList selectedIndexes = ui->tagsTableView->selectionModel()->selectedIndexes();
-    if (!selectedIndexes.isEmpty()) {
-        int selectedRow = selectedIndexes.first().row();
-        quint64 offset = ui->tagsTableView->model()->data(ui->tagsTableView->model()->index(selectedRow, 0)).toULongLong();
+    QModelIndexList selectedIndexes = ui->tagsTableView->selectionModel()->selectedRows();
+    if (selectedIndexes.isEmpty()) {
+        QMessageBox::warning(this, tr("No Selection"), tr("No tag selected. Please select a tag to export."));
+        return;
+    }
 
-        // Ask the user for the file name to save the data
-        QString fileName = QFileDialog::getSaveFileName(this, tr("Save Tag Data"), "", tr("Text Files (*.txt);;All Files (*)"));
-        if (fileName.isEmpty()) return;
+    if (selectedIndexes.size() > 1) {
+        QMessageBox::warning(this, tr("Multiple Selection"), tr("Multiple tags selected. Please select only one tag to export."));
+        return;
+    }
 
-        // Export the tag data to a file
+    int selectedRow = selectedIndexes.first().row();
+    quint64 offset = ui->tagsTableView->model()->data(ui->tagsTableView->model()->index(selectedRow, 0)).toULongLong();
+
+    QString fileName = QFileDialog::getSaveFileName(this, tr("Save Tag Data"), "", tr("Text Files (*.txt);;All Files (*)"));
+    if (fileName.isEmpty()) return;
+
+    try {
         ui->hexEditorWidget->exportTagDataByOffset(offset, fileName);
-    } else {
-        qDebug() << "No tag selected.";
+        QMessageBox::information(this, tr("Export Successful"), tr("Tag data has been successfully exported to:\n%1").arg(fileName));
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, tr("Export Failed"), tr("Failed to export tag data: %1").arg(e.what()));
     }
 }
 
 void HexViewerForm::onExportSelectedTemplateTagData()
 {
-    // Get the selected tag's offset from the table view
-    QModelIndexList selectedIndexes = ui->TemplateTagstableView->selectionModel()->selectedIndexes();
-    if (!selectedIndexes.isEmpty()) {
-        int selectedRow = selectedIndexes.first().row();
-        quint64 offset = ui->TemplateTagstableView->model()->data(ui->TemplateTagstableView->model()->index(selectedRow, 0)).toULongLong();
+    QModelIndexList selectedIndexes = ui->TemplateTagstableView->selectionModel()->selectedRows();
+    if (selectedIndexes.isEmpty()) {
+        QMessageBox::warning(this, tr("No Selection"), tr("No template tag selected. Please select a template tag to export."));
+        return;
+    }
 
-        // Ask the user for the file name to save the data
-        QString fileName = QFileDialog::getSaveFileName(this, tr("Save Tag Data"), "", tr("Text Files (*.txt);;All Files (*)"));
-        if (fileName.isEmpty()) return;
+    if (selectedIndexes.size() > 1) {
+        QMessageBox::warning(this, tr("Multiple Selection"), tr("Multiple template tags selected. Please select only one template tag to export."));
+        return;
+    }
 
-        // Export the tag data to a file
+    int selectedRow = selectedIndexes.first().row();
+    quint64 offset = ui->TemplateTagstableView->model()->data(ui->TemplateTagstableView->model()->index(selectedRow, 0)).toULongLong();
+
+    QString fileName = QFileDialog::getSaveFileName(this, tr("Save Template Tag Data"), "", tr("Text Files (*.txt);;All Files (*)"));
+    if (fileName.isEmpty()) return;
+
+    try {
         ui->hexEditorWidget->exportTagDataByOffset(offset, fileName);
-    } else {
-        qDebug() << "No tag selected.";
+        QMessageBox::information(this, tr("Export Successful"), tr("Template tag data has been successfully exported to:\n%1").arg(fileName));
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, tr("Export Failed"), tr("Failed to export template tag data: %1").arg(e.what()));
     }
 }
-
 void HexViewerForm::openFile(const QString &fileName,int tabIndex)
 {
 
@@ -312,18 +344,18 @@ void HexViewerForm::onBytesPerLineChanged(int index)
     hexEditor->changeBytesPerLine(bytesPerLine);
 }
 
-void HexViewerForm::onGoToOffsetClicked()
-{
+void HexViewerForm::onGoToOffsetClicked(){
     GoToOffsetDialog dialog(this);
-    if (dialog.exec() == QDialog::Accepted) {
-        qDebug() << "onGoToOffsetClicked accepted";
+    dialog.exec();
 
-        quint64 newOffset = dialog.offset();
-        if (newOffset < ui->hexEditorWidget->fileSize) {
-            ui->hexEditorWidget->clearSelection();
-            ui->hexEditorWidget->setSelectedByte(newOffset);
-            //  ui->hexEditorWidget->ensureCursorVisible();
-        }
+}
+
+void HexViewerForm::jumpToOffset(quint64 offset)
+{
+    if (offset < ui->hexEditorWidget->fileSize) {
+        ui->hexEditorWidget->clearSelection();
+        ui->hexEditorWidget->setSelectedByte(offset);
+        //  ui->hexEditorWidget->ensureCursorVisible();
     }
 }
 
@@ -603,12 +635,15 @@ void HexViewerForm::onTableRowRightClicked(const QPoint &pos)
     QMenu contextMenu;
     QAction *goToMFTAction ;
 
+
+
     if(fsHandler->fileSystemType=="NTFS"){
          goToMFTAction = contextMenu.addAction("Go to $MFT entry");
 
-    }
+    } else if(fsHandler->fileSystemType=="FAT"){
+        goToMFTAction = contextMenu.addAction("Go to Directory Entry");
 
-    if(fsHandler->fileSystemType=="FAT"){
+    }else{
         goToMFTAction = contextMenu.addAction("Go to Directory Entry");
 
     }
@@ -631,9 +666,7 @@ void HexViewerForm::onTableRowRightClicked(const QPoint &pos)
 void HexViewerForm::onExportAction(const QModelIndex &index)
 {
 
-    loadingDialog->setMessage("Loading , please wait...");
-    loadingDialog->show();
-    qApp->processEvents();
+
 
 
     qDebug() << "QModelIndex" << index;
@@ -675,11 +708,19 @@ void HexViewerForm::onExportAction(const QModelIndex &index)
 
     qDebug() << "destinationPath:" << destinationPath;
 
-    if (destinationPath.isEmpty())
+    if (destinationPath.isEmpty()){
+
+
         return;
+
+    }
 
     try {
         qDebug() << "exportFileContents" << partitionIndex << "filePath" << filePath << "destinationPath" << destinationPath;
+
+        loadingDialog->setMessage("Loading , please wait...");
+        loadingDialog->show();
+        qApp->processEvents();
 
         if (fileType == "Directory") {
             // Recursively copy the directory contents
@@ -687,6 +728,7 @@ void HexViewerForm::onExportAction(const QModelIndex &index)
         } else {
             fsHandler->exportFileContents(partitionIndex, filePath, destinationPath);
         }
+        loadingDialog->hide();
 
         QMessageBox::information(this, tr("Success"), tr("File exported successfully"));
     } catch (const FileSystemException &e) {
@@ -857,4 +899,18 @@ void HexViewerForm::onMarkersTableDoubleClicked(const QModelIndex &index)
     }
 }
 
+void HexViewerForm::onSaveButtonClicked()
+{
+    loadingDialog->setMessage("Saving tags, please wait...");
+    loadingDialog->show();
+    qApp->processEvents();
 
+    ui->hexEditorWidget->syncTagsOnClose([this](bool success) {
+        loadingDialog->hide();
+        if (success) {
+            QMessageBox::information(this, tr("Tags Saved"), tr("All tags have been saved successfully."));
+        } else {
+            QMessageBox::warning(this, tr("Save Failed"), tr("Failed to save tags. Please try again."));
+        }
+    });
+}

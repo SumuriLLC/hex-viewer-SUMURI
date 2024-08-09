@@ -179,6 +179,25 @@ QList<QStringList> FileSystemHandler::listFilesInDirectory(int partitionIndex, c
 
             QString fileType = (fs_name->type == TSK_FS_NAME_TYPE_DIR) ? "Directory" : "File";
 
+
+            int StartingClusterNumber=0;
+
+            if( fs->ftype == TSK_FS_TYPE_NTFS ){
+                StartingClusterNumber=file->meta->seq;
+            }
+
+             if (fs->ftype == TSK_FS_TYPE_EXFAT || fs->ftype == TSK_FS_TYPE_FAT12 || fs->ftype == TSK_FS_TYPE_FAT16 || fs->ftype == TSK_FS_TYPE_FAT32) {
+
+                TSK_DADDR_T *addr_ptr;
+                addr_ptr = (TSK_DADDR_T *) file->meta->content_ptr;
+
+
+               // qDebug() << "content_ptr " << addr_ptr[0];
+
+                 StartingClusterNumber=addr_ptr[0];
+            }
+
+
             QStringList fileAttributes;
             fileAttributes << QString::fromUtf8(fs_name->name)
                            << filePath
@@ -188,7 +207,7 @@ QList<QStringList> FileSystemHandler::listFilesInDirectory(int partitionIndex, c
                            << QDateTime::fromSecsSinceEpoch(file->meta->mtime).toLocalTime().toString("yyyy-MM-dd hh:mm:ss")
                            << QDateTime::fromSecsSinceEpoch(file->meta->atime).toLocalTime().toString("yyyy-MM-dd hh:mm:ss")
                            << QString::number(file->meta->addr)
-                           << QString::number(file->meta->seq)
+                           << QString::number(StartingClusterNumber)
                            << fileType;
 
 
@@ -567,4 +586,102 @@ quint64 FileSystemHandler::getPartitionMftFileLocation(int partitionIndex)
     }
 
     return mftLocation;
+}
+
+QList<QStringList> FileSystemHandler::getAvailablePartitions() const
+{
+    QList<QStringList> partitions;
+
+    int partitionCounter=1;
+
+    if (vs) {
+        for (uint32_t i = 0; i < vs->part_count; ++i) {
+            const TSK_VS_PART_INFO *part = tsk_vs_part_get(vs, i);
+            if (!part)
+                continue;
+
+            // Open the filesystem to determine its type
+            TSK_FS_INFO *fs = tsk_fs_open_vol(part, TSK_FS_TYPE_DETECT);
+            if (!fs)
+                continue;
+
+            // Check if the file system type is NTFS, FAT, or exFAT
+            if (fs->ftype == TSK_FS_TYPE_NTFS ||
+                fs->ftype == TSK_FS_TYPE_FAT12 ||
+                fs->ftype == TSK_FS_TYPE_FAT16 ||
+                fs->ftype == TSK_FS_TYPE_FAT32 ||
+                fs->ftype == TSK_FS_TYPE_EXFAT) {
+
+                QStringList partitionDetails;
+                partitionDetails << QString::number(i)
+                                 << QString("Partition %1").arg(partitionCounter);  // Partition name in format "Partition 1", "Partition 2", etc.
+
+                partitions.append(partitionDetails);
+                partitionCounter++;
+            }
+
+            // Close the filesystem info to prevent leaks
+            tsk_fs_close(fs);
+        }
+    } else if (fsOpenedDirectly) {
+        TSK_FS_INFO *fs = openFileSystems.first();
+        // Check if the directly opened filesystem is NTFS, FAT, or exFAT
+        if (fs->ftype == TSK_FS_TYPE_NTFS ||
+            fs->ftype == TSK_FS_TYPE_FAT12 ||
+            fs->ftype == TSK_FS_TYPE_FAT16 ||
+            fs->ftype == TSK_FS_TYPE_FAT32 ||
+            fs->ftype == TSK_FS_TYPE_EXFAT) {
+
+            QStringList partitionDetails;
+            partitionDetails << "0"  // Partition Index
+                             << "Partition 1";  // Partition name for single file system
+
+            partitions.append(partitionDetails);
+        }
+    }
+
+    return partitions;
+}
+
+quint64 FileSystemHandler::calculateClusterOffset(int partitionIndex, qint64 clusterNumber)
+{
+    TSK_FS_INFO *fs = getFileSystem(partitionIndex);
+    if (!fs) {
+        throw FileSystemException("Invalid file system");
+    }
+
+    const quint64 partitionOffset = fs->offset;
+    quint64 clusterOffset = 0;
+
+    if (fs->ftype == TSK_FS_TYPE_NTFS) {
+        // For NTFS, clusters are referred to as sectors
+        clusterOffset = partitionOffset + (clusterNumber * fs->block_size);
+    } else if (fs->ftype == TSK_FS_TYPE_EXFAT || fs->ftype == TSK_FS_TYPE_FAT12 || fs->ftype == TSK_FS_TYPE_FAT16 || fs->ftype == TSK_FS_TYPE_FAT32) {
+        const FATFS_INFO *fatfs = (FATFS_INFO *) fs;
+
+        qDebug() << "CLUSTER count clustcnt" << fatfs->clustcnt;
+
+        if(clusterNumber > fatfs->clustcnt){
+            QString errorMessage = QString("Maximum Cluster count is %1").arg(fatfs->clustcnt);
+            throw FileSystemException(errorMessage);
+        }
+
+        const quint64 dataStart = fatfs->firstdatasect;
+        const quint64 CLUSTER_SIZE=(uint32_t) fatfs->csize << fatfs->ssize_sh;
+        //Cluster 0-2 are empty
+        const quint64 ZeroToTwoOffset= 2 * CLUSTER_SIZE;
+        clusterOffset = partitionOffset +  (dataStart * fs->block_size)+  (clusterNumber * CLUSTER_SIZE) - ZeroToTwoOffset;
+        qDebug() << "CLUSTER_SIZE:" << CLUSTER_SIZE;
+
+
+
+
+
+
+
+    } else {
+        throw FileSystemException("Unsupported file system type");
+    }
+
+    return clusterOffset;
 }

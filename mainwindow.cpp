@@ -3,6 +3,8 @@
 #include <QInputDialog>
 #include "headers/physicaldrivesdialog.h"
 #include <QCloseEvent>
+#include <QRegularExpression>
+#include <QProgressDialog>
 
 
 //Multiple instances will be created for each tab Form
@@ -80,6 +82,16 @@ void MainWindow::on_openDiskButton_clicked()
 }
 void MainWindow::createNewTab(const QString &fileName, bool sync)
 {
+
+
+    QFileInfo fileInfo(fileName);
+
+    QRegularExpression systemDrivePattern(R"(\\\\\.\\(?:PhysicalDrive\d+|[A-Z]:))");
+    if (!systemDrivePattern.match(fileName).hasMatch() && !fileInfo.exists()) {
+        qDebug() << "File does not exist:" << fileName;
+        return;
+    }
+
     HexViewerForm *hexViewerForm = new HexViewerForm(this);
     quint64 index = ui->tabWidget->addTab(hexViewerForm, QFileInfo(fileName).fileName());
 
@@ -101,9 +113,6 @@ void MainWindow::createNewTab(const QString &fileName, bool sync)
 
     connect(hexViewerForm->hexEditor(), &HexEditor::selectionChanged, dataTypeViewModel, &DataTypeViewModel::updateData);
     connect(hexViewerForm->hexEditor(), &HexEditor::tagNameAndLength, this, &MainWindow::onTagNameAndLength);
-
-
-
 
 }
 
@@ -187,17 +196,61 @@ void MainWindow::onTagNameAndLength(const QString &tagName, quint64 length, QStr
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    for (int i = 0; i < ui->tabWidget->count(); ++i) {
+    static bool isClosing = false;
+    if (isClosing) {
+        event->accept();
+        return;
+    }
+
+    event->ignore();
+    isClosing = true;
+
+    int tabCount = ui->tabWidget->count();
+    if (tabCount == 0) {
+        event->accept();
+        return;
+    }
+
+    QProgressDialog *progress = new QProgressDialog("Saving tags...", "Cancel", 0, tabCount, this);
+    progress->setWindowModality(Qt::WindowModal);
+    progress->setMinimumDuration(0);
+    progress->setValue(0);
+
+    std::shared_ptr<std::atomic<int>> completedTabs = std::make_shared<std::atomic<int>>(0);
+    std::shared_ptr<std::atomic<bool>> allSuccessful = std::make_shared<std::atomic<bool>>(true);
+
+    for (int i = 0; i < tabCount; ++i) {
         HexViewerForm *hexViewerForm = qobject_cast<HexViewerForm*>(ui->tabWidget->widget(i));
         if (hexViewerForm) {
             HexEditor *hexEditor = hexViewerForm->hexEditor();
             if (hexEditor) {
-                hexEditor->syncTagsOnClose();
+                hexEditor->syncTagsOnClose([this, completedTabs, allSuccessful, progress, tabCount](bool success) {
+                    allSuccessful->store(allSuccessful->load() && success);
+                    int completed = ++(*completedTabs);
+                    progress->setValue(completed);
+
+                    if (completed == tabCount) {
+                        progress->close();
+                        if (allSuccessful->load()) {
+                            QMetaObject::invokeMethod(this, "close", Qt::QueuedConnection);
+                        } else {
+                            QMessageBox::StandardButton reply = QMessageBox::warning(
+                                this,
+                                tr("Save Failed"),
+                                tr("Failed to save tags for some tabs. Do you want to close anyway?"),
+                                QMessageBox::Yes | QMessageBox::No,
+                                QMessageBox::No
+                                );
+                            if (reply == QMessageBox::Yes) {
+                                QMetaObject::invokeMethod(this, "close", Qt::QueuedConnection);
+                            } else {
+                                isClosing = false;
+                            }
+                        }
+                        progress->deleteLater();
+                    }
+                });
             }
         }
     }
-    event->accept();
 }
-
-
-

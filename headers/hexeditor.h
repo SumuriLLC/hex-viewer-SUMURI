@@ -32,7 +32,7 @@ public:
     quint64 cursorPosition;
     quint64 fileSize;
     void addTag(quint64 offset, quint64 length, const QString &description, const QColor &color, const QString &type);
-    void removeTag(quint64 offset, int index = -1);
+    void removeTag(quint64 offset, int index, const QString &tagType);
     void clearTags();
 
     void exportTags(const QString &type);
@@ -56,7 +56,7 @@ public:
 
 
 public slots:
-    void syncTagsOnClose();
+    void syncTagsOnClose(std::function<void(bool)> callback);
 
 signals:
     void selectionChanged(const QByteArray &selectedData, quint64 startOffset, quint64 endOffset);
