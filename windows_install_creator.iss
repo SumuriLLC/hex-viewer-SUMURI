@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Sumuri Hex Viewer(Preview)"
-#define MyAppVersion "2.0.2"
+#define MyAppVersion "2.0.3"
 #define MyAppPublisher "Sumuri LLC"
 #define MyAppURL "https://sumuri.com/"
 #define MyAppExeName "SumuriHexViewerVersion1.exe"

@@ -423,6 +423,7 @@ void HexViewerForm::on_readAsImageButton_clicked()
             tab->setLayout(tabLayout);
 
 
+
             int tabIndex = ui->FileSystemTabWidget->addTab(tab, tabTitle);
             currentDirMap[tabIndex] = "/";
             tabPartitionMap[tabIndex] = i; // Map tab index to partition index
@@ -430,6 +431,8 @@ void HexViewerForm::on_readAsImageButton_clicked()
 
 
         }
+
+
 
         // Populate the markers table once after opening the image
         populateMarkersTable();

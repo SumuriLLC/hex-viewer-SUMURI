@@ -497,3 +497,113 @@ QFuture<void> TagsHandler::syncTagsAsync(const QList<Tag> &tags, int tabID)
 {
     return QtConcurrent::run([this, tags, tabID]() { syncTags(tags, tabID); });
 }
+
+
+bool TagsHandler::removeTab(int tabIndex)
+{
+    ensureDatabaseOpen();
+
+    if (!db.isOpen()) {
+        qDebug() << "Database is not open, cannot remove tab.";
+        return false;
+    }
+
+    // Start a transaction to ensure data consistency
+    db.transaction();
+
+    bool success = true;
+    QSqlQuery query(db);
+
+    // First remove associated tags
+    // Remove user tags
+    QString deleteUserTags = QString("DELETE FROM UserTags WHERE tabID = %1").arg(tabIndex);
+    if (!query.exec(deleteUserTags)) {
+        qDebug() << "Error: unable to remove user tags for tab" << tabIndex
+                 << "-" << query.lastError().text();
+        success = false;
+    }
+
+    // Remove template tags
+    QString deleteTemplateTags = QString("DELETE FROM TemplateTags WHERE tabID = %1").arg(tabIndex);
+    if (!query.exec(deleteTemplateTags)) {
+        qDebug() << "Error: unable to remove template tags for tab" << tabIndex
+                 << "-" << query.lastError().text();
+        success = false;
+    }
+
+    // Update tabIDs for remaining tags
+    QString updateUserTags = QString("UPDATE UserTags SET tabID = tabID - 1 WHERE tabID > %1").arg(tabIndex);
+    if (!query.exec(updateUserTags)) {
+        qDebug() << "Error: unable to update user tags tabIDs"
+                 << "-" << query.lastError().text();
+        success = false;
+    }
+
+    QString updateTemplateTags = QString("UPDATE TemplateTags SET tabID = tabID - 1 WHERE tabID > %1").arg(tabIndex);
+    if (!query.exec(updateTemplateTags)) {
+        qDebug() << "Error: unable to update template tags tabIDs"
+                 << "-" << query.lastError().text();
+        success = false;
+    }
+
+    // Then remove the tab itself
+    QString deleteTab = QString("DELETE FROM Tab WHERE TabIndex = %1").arg(tabIndex);
+    if (!query.exec(deleteTab)) {
+        qDebug() << "Error: unable to remove tab" << tabIndex
+                 << "-" << query.lastError().text();
+        success = false;
+    }
+
+    // Update remaining tab indices
+    QString updateTabs = QString("UPDATE Tab SET TabIndex = TabIndex - 1 WHERE TabIndex > %1").arg(tabIndex);
+    if (!query.exec(updateTabs)) {
+        qDebug() << "Error: unable to update remaining tab indices"
+                 << "-" << query.lastError().text();
+        success = false;
+    }
+
+    if (success) {
+        db.commit();
+        qDebug() << "Successfully removed tab" << tabIndex;
+    } else {
+        db.rollback();
+        qDebug() << "Failed to remove tab" << tabIndex;
+    }
+
+    return success;
+}
+void TagsHandler::cleanupTabData(int tabIndex)
+{
+    QSqlQuery query(db);
+
+    // Remove user tags associated with this tab
+    query.prepare("DELETE FROM UserTags WHERE tabID = ?");
+    query.addBindValue(tabIndex);
+    if (!query.exec()) {
+        qDebug() << "Error: unable to remove user tags for tab" << tabIndex
+                 << "-" << query.lastError().text();
+    }
+
+    // Remove template tags associated with this tab
+    query.prepare("DELETE FROM TemplateTags WHERE tabID = ?");
+    query.addBindValue(tabIndex);
+    if (!query.exec()) {
+        qDebug() << "Error: unable to remove template tags for tab" << tabIndex
+                 << "-" << query.lastError().text();
+    }
+
+    // Update tabIDs for remaining tags
+    query.prepare("UPDATE UserTags SET tabID = tabID - 1 WHERE tabID > ?");
+    query.addBindValue(tabIndex);
+    if (!query.exec()) {
+        qDebug() << "Error: unable to update user tags tabIDs"
+                 << "-" << query.lastError().text();
+    }
+
+    query.prepare("UPDATE TemplateTags SET tabID = tabID - 1 WHERE tabID > ?");
+    query.addBindValue(tabIndex);
+    if (!query.exec()) {
+        qDebug() << "Error: unable to update template tags tabIDs"
+                 << "-" << query.lastError().text();
+    }
+}

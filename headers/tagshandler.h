@@ -42,6 +42,10 @@ public:
        void addRecentFolder(const QString &path);
        QList<QString> getRecentFolders() const;
 
+       bool removeTab(int tabIndex);
+       void cleanupTabData(int tabIndex);
+
+
 private:
     QSqlDatabase db;
     QString connectionName;

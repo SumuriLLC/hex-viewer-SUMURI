@@ -48,6 +48,10 @@ HexEditor::HexEditor(QWidget *parent)
     loadingDialog(new LoadingDialog(this)),
     file_name("")
 {
+
+
+
+
     setFont(QFont("Courier New", 10));
     QFontMetrics fm(font());
     charWidth = fm.horizontalAdvance('0');
@@ -68,6 +72,9 @@ HexEditor::HexEditor(QWidget *parent)
 
 
 }
+
+
+
 
 void HexEditor::setTagsHandler(TagsHandler *tagsHandler)
 {
@@ -475,7 +482,20 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
                 }
             }
 
-            painter.fillRect(addressAreaWidth + byte * 3 * charWidth - horizontalOffset, headerHeight + (line - startLine) * charHeight, 3 * charWidth, charHeight, backgroundColor);
+           // painter.fillRect(addressAreaWidth + byte * 3 * charWidth - horizontalOffset, headerHeight + (line - startLine) * charHeight, 3 * charWidth, charHeight, backgroundColor);
+
+            int x_highlight_offset=-4;
+            int y_highlight_offset=3;
+
+            painter.fillRect(
+                addressAreaWidth + byte * 3 * charWidth - horizontalOffset + x_highlight_offset,  // Adjust x-position
+                headerHeight + (line - startLine) * charHeight +y_highlight_offset ,
+                3 * charWidth ,  // Adjust width to center text within
+                charHeight,
+                backgroundColor
+                );
+
+
 
             // Set the font color based on the background color's brightness
             int brightness = (backgroundColor.red() * 299 + backgroundColor.green() * 587 + backgroundColor.blue() * 114) / 1000;
@@ -499,14 +519,14 @@ void HexEditor::drawHexArea(QPainter &painter, quint64 startLine, int horizontal
         for (quint64 i = 8; i < bytesPerLine; i += 8) {
             int x = addressAreaWidth + i * 3 * charWidth - horizontalOffset;
             //qDebug() << "Drawing vertical line... i:" << i << "x:" << x << "headerHeight:" << headerHeight << "totalHeight:" << totalHeight;
-            painter.drawLine(x, headerHeight, x, totalHeight);
+            painter.drawLine(x-3, headerHeight, x-3, totalHeight);
         }
 
         // Draw vertical line between hex and ASCII areas
         int separatorX = addressAreaWidth + hexAreaWidth - horizontalOffset-1;
         //qDebug() << "Drawing separator line... separatorX:" << separatorX << "headerHeight:" << headerHeight << "totalHeight:" << totalHeight;
         painter.setPen(Qt::gray);  // Set pen color for separator
-        painter.drawLine(separatorX, headerHeight, separatorX, totalHeight);
+        painter.drawLine(separatorX-3, headerHeight, separatorX-3, totalHeight);
     }
 
 
@@ -577,13 +597,13 @@ void HexEditor::drawHeader(QPainter &painter, int horizontalOffset)
         // Draw vertical line after every 8 columns
         if (i > 0 && i % 8 == 0) {
             quint64 x = addressAreaWidth + i * 3 * charWidth - horizontalOffset;
-            painter.drawLine(x, 0, x, headerHeight);
+            painter.drawLine(x-3, 0, x-3, headerHeight);
         }
     }
 
     // Draw vertical line between hex and ASCII areas
     quint64 separatorX = addressAreaWidth + hexAreaWidth - horizontalOffset-1;
-    painter.drawLine(separatorX, 0, separatorX, headerHeight);
+    painter.drawLine(separatorX-3, 0, separatorX-3, headerHeight);
 }
 
 void HexEditor::contextMenuEvent(QContextMenuEvent *event)

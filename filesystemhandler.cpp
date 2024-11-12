@@ -220,7 +220,6 @@ QList<QStringList> FileSystemHandler::listFilesInDirectory(int partitionIndex, c
             tsk_fs_file_close(file);
         }
 
-        if (fs->ftype == TSK_FS_TYPE_EXFAT) {
 
             if (!dotDotFound) {
                 QString parentPath = directoryPath;
@@ -261,7 +260,6 @@ QList<QStringList> FileSystemHandler::listFilesInDirectory(int partitionIndex, c
                 fileList.prepend(dotAttributes);
             }
 
-        }
 
         // fileSystemType
 

@@ -41,7 +41,20 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->openDiskButton, &QPushButton::clicked, this, &MainWindow::on_openDiskButton_clicked);
 
+    // Handle tab close request
+    connect(ui->tabWidget, &QTabWidget::tabCloseRequested, this, [=](int index) {
+        // Remove the tab and clean up maps
+        qDebug() << "Closing tab " << index;
 
+        if (userTagsHandler->removeTab(index)) {
+            qDebug() << "Tab removed successfully";
+            ui->tabWidget->removeTab(index);
+
+        } else {
+            qDebug() << "Failed to remove tab";
+        }
+
+    });
 
 }
 
